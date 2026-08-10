@@ -14,6 +14,9 @@
     background: #f7f7f8;
     color: #1c1c1e;
   }
+  @media (min-width: 900px) {
+    body { max-width: 1080px; }
+  }
   header {
     display: flex;
     align-items: center;
@@ -93,6 +96,7 @@
     color: #1c1c1e;
     resize: vertical;
     background: #fff;
+    overflow-y: hidden;
   }
   .copy-btn {
     display: block;
@@ -127,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.6.0</span>
+  <span class="version-badge">v0.6.1</span>
 </header>
 
 <div class="status-row">
@@ -268,6 +272,11 @@ function buildReport(data) {
 
 const WORKER_URL = 'https://spokesperson-toolkit-proxy.kkboytest.workers.dev';
 
+function autoGrowTextarea() {
+  outputEl.style.height = 'auto';
+  outputEl.style.height = `${outputEl.scrollHeight + 2}px`;
+}
+
 async function load(live) {
   reloadBtn.disabled = true;
   statusEl.classList.remove('error');
@@ -289,8 +298,12 @@ async function load(live) {
     if (!live) outputEl.value = '（尚無資料，請確認 GitHub Actions 排程是否已執行過一次，或手動觸發 workflow_dispatch）';
   } finally {
     reloadBtn.disabled = false;
+    autoGrowTextarea();
   }
 }
+
+window.addEventListener('resize', autoGrowTextarea);
+outputEl.addEventListener('input', autoGrowTextarea);
 
 reloadBtn.addEventListener('click', () => load(true));
 

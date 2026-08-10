@@ -36,47 +36,51 @@ async function fetchForex() {
   };
 }
 
+async function fetchRealtimeQuote(exCh) {
+  // TWSE's own official realtime quote system (same one twstock's
+  // realtime module and TWSE's own website widgets use). Gives same-day
+  // price/change well before the OpenAPI/FMTQIK mirrors publish.
+  const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${exCh}&_=${Date.now()}`;
+  const json = await fetchJson(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Referer: 'https://mis.twse.com.tw/stock/index.jsp',
+    },
+  });
+  const quote = json.msgArray?.[0];
+  if (json.rtcode !== '0000' || !quote || !quote.z || !quote.y) {
+    throw new Error(`mis.twse.com.tw 沒有 ${exCh} 的即時資料`);
+  }
+  return quote;
+}
+
+function priceChange(quote) {
+  return Math.round((Number(quote.z) - Number(quote.y)) * 100) / 100;
+}
+
 async function fetchMarket() {
+  const quote = await fetchRealtimeQuote('tse_t00.tw');
+  // The realtime index quote has no market-wide turnover figure, so
+  // trade_value still comes from FMTQIK and keeps its own (often older) date.
   const rows = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK');
-  const latest = rows[rows.length - 1];
+  const latestFmtqik = rows[rows.length - 1];
   return {
-    date: latest.Date,
-    taiex: Number(latest.TAIEX),
-    change: Number(latest.Change),
-    trade_value: Number(latest.TradeValue),
-  };
-}
-
-function rocDateToInternal(rocDate) {
-  // "115/08/10" -> "1150810" (matches the ROC date format used elsewhere)
-  return rocDate.replace(/\//g, '');
-}
-
-async function fetchHonChuanForMonth(yyyymm01) {
-  // The STOCK_DAY_ALL OpenAPI mirror lags a day behind; this classic
-  // per-stock endpoint publishes the same trading day's close sooner.
-  const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${yyyymm01}&stockNo=9939`;
-  const json = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-  if (json.stat !== 'OK' || !json.data || json.data.length === 0) return null;
-  const row = json.data[json.data.length - 1];
-  const [rocDate, volumeShares, , , , , closePrice, change] = row;
-  return {
-    date: rocDateToInternal(rocDate),
-    close: Number(closePrice),
-    change: Number(change),
-    volume: Number(volumeShares.replace(/,/g, '')),
+    date: quote.d,
+    taiex: Number(quote.z),
+    change: priceChange(quote),
+    trade_value: Number(latestFmtqik.TradeValue),
+    trade_value_date: latestFmtqik.Date,
   };
 }
 
 async function fetchHonChuan() {
-  const now = new Date();
-  const thisMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}01`;
-  const result = await fetchHonChuanForMonth(thisMonth);
-  if (result) return result;
-  // Fallback for the first trading day(s) of a month, before this month has any rows yet.
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonth = `${prev.getFullYear()}${String(prev.getMonth() + 1).padStart(2, '0')}01`;
-  return fetchHonChuanForMonth(prevMonth);
+  const quote = await fetchRealtimeQuote('tse_9939.tw');
+  return {
+    date: quote.d,
+    close: Number(quote.z),
+    change: priceChange(quote),
+    volume: Number(quote.v) * 1000, // "v" is in 張 (board lots of 1000 shares)
+  };
 }
 
 async function fetchOil(token) {

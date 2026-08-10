@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-10T02:59:51.390Z",
+  "generated_at": "2026-08-10T07:09:40.284Z",
   "forex": {
     "date": "20260807",
     "usd_twd": 32.288,
@@ -8,27 +8,28 @@
     "cny_twd": 4.785889
   },
   "market": {
-    "date": "1150807",
-    "taiex": 44225.91,
-    "change": -170.79,
-    "trade_value": 850815189087
+    "date": "20260810",
+    "taiex": 44928.76,
+    "change": 702.85,
+    "trade_value": 850815189087,
+    "trade_value_date": "1150807"
   },
   "honchuan": {
-    "date": "1150807",
+    "date": "20260810",
     "close": 144.5,
-    "change": 2,
-    "volume": 3055602
+    "change": 0,
+    "volume": 2359000
   },
   "oil": {
     "wti": {
-      "price": 78.69,
-      "change": 1.61,
-      "as_of": "2026-08-10T02:54:49.000Z"
+      "price": 78.52,
+      "change": 1.44,
+      "as_of": "2026-08-10T07:07:45.747Z"
     },
     "brent": {
-      "price": 84.36,
-      "change": 0.81,
-      "as_of": "2026-08-10T02:31:41.412Z"
+      "price": 83.9,
+      "change": 0.35,
+      "as_of": "2026-08-10T05:56:44.199Z"
     }
   },
   "us_market": {

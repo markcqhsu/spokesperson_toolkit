@@ -93,7 +93,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.2.0</span>
+  <span class="version-badge">v0.2.1</span>
 </header>
 
 <div class="status" id="status">載入中...</div>
@@ -146,16 +146,16 @@ function buildReport(data) {
   const marketDate = fmtDateFromROC(data.market.date);
   const forexDate = fmtDateFromWestern(data.forex.date);
 
-  const marketChange = Math.round(data.market.change);
+  const marketChange = Math.trunc(data.market.change);
   const marketChangeStr = (marketChange >= 0 ? '+' : '') + marketChange;
   const tradeValueYi = (data.market.trade_value / 1e8).toFixed(0);
 
   const hc = data.honchuan;
-  const hcChangeStr = (hc.change >= 0 ? '+' : '') + hc.change;
+  const hcChangeStr = (hc.change >= 0 ? '+' : '') + hc.change.toFixed(1);
   const hcVolumeZhang = Math.round(hc.volume / 1000).toLocaleString('en-US');
 
   const us = data.us_market;
-  const usChangeStr = (us.change >= 0 ? '+' : '') + Math.round(us.change);
+  const usChangeStr = (us.change >= 0 ? '+' : '') + Math.trunc(us.change);
   const usDate = new Date(us.as_of);
   const usDateStr = `${usDate.getMonth() + 1}/${usDate.getDate()}`;
 
@@ -169,10 +169,10 @@ function buildReport(data) {
     `☀️宏全 ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`,
     ``,
     `💲匯率：(期交所盤後參考匯率，資料日期 ${forexDate.m}/${forexDate.d})`,
-    `1美元 兌 台幣${data.forex.usd_twd}元`,
-    `1歐元 兌 美元${data.forex.eur_usd}元`,
-    `1美元 兌 人民幣${data.forex.usd_cny}元`,
-    `1人民幣 兌 台幣${data.forex.cny_twd}元`,
+    `1美元 兌 台幣${data.forex.usd_twd.toFixed(4)}元`,
+    `1歐元 兌 美元${data.forex.eur_usd.toFixed(4)}元`,
+    `1美元 兌 人民幣${data.forex.usd_cny.toFixed(4)}元`,
+    `1人民幣 兌 台幣${data.forex.cny_twd.toFixed(4)}元`,
     ``,
     `🌐美股道瓊(${usDateStr}): ${usChangeStr}點`,
     `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}`,

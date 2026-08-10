@@ -55,16 +55,36 @@ async function fetchMarket() {
   };
 }
 
-async function fetchHonChuan() {
-  const rows = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
-  const hc = rows.find((r) => r.Code === '9939');
-  if (!hc) return null;
+function rocDateToInternal(rocDate) {
+  // "115/08/10" -> "1150810" (matches the ROC date format used elsewhere)
+  return rocDate.replace(/\//g, '');
+}
+
+async function fetchHonChuanForMonth(yyyymm01) {
+  // The STOCK_DAY_ALL OpenAPI mirror lags a day behind; this classic
+  // per-stock endpoint publishes the same trading day's close sooner.
+  const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${yyyymm01}&stockNo=9939`;
+  const json = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (json.stat !== 'OK' || !json.data || json.data.length === 0) return null;
+  const row = json.data[json.data.length - 1];
+  const [rocDate, volumeShares, , , , , closePrice, change] = row;
   return {
-    date: hc.Date,
-    close: Number(hc.ClosingPrice),
-    change: Number(hc.Change),
-    volume: Number(hc.TradeVolume),
+    date: rocDateToInternal(rocDate),
+    close: Number(closePrice),
+    change: Number(change),
+    volume: Number(volumeShares.replace(/,/g, '')),
   };
+}
+
+async function fetchHonChuan() {
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}01`;
+  const result = await fetchHonChuanForMonth(thisMonth);
+  if (result) return result;
+  // Fallback for the first trading day(s) of a month, before this month has any rows yet.
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonth = `${prev.getFullYear()}${String(prev.getMonth() + 1).padStart(2, '0')}01`;
+  return fetchHonChuanForMonth(prevMonth);
 }
 
 async function fetchOil(token) {

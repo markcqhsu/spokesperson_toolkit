@@ -127,7 +127,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.4.1</span>
+  <span class="version-badge">v0.4.2</span>
 </header>
 
 <div class="status-row">
@@ -196,7 +196,9 @@ function commas(n) {
 }
 
 function buildReport(data) {
+  const today = new Date();
   const marketDate = fmtDateFromROC(data.market.date);
+  const hcDate = fmtDateFromROC(data.honchuan.date);
   const forexDate = fmtDateFromWestern(data.forex.date);
 
   const marketChange = Math.trunc(data.market.change);
@@ -216,10 +218,13 @@ function buildReport(data) {
   const wtiChangeStr = oil.wti.change == null ? '' : `(${(oil.wti.change >= 0 ? '+' : '')}${oil.wti.change.toFixed(2)}美元)`;
   const brentChangeStr = oil.brent.change == null ? '' : `(${(oil.brent.change >= 0 ? '+' : '')}${oil.brent.change.toFixed(2)}美元)`;
 
+  // 大盤、宏全各自的資料源更新時間點不同（例如宏全個股資料常比大盤加權
+  // 指數統計早發布），不能假設兩者一定是同一個交易日，所以每一行都
+  // 各自標註實際資料日期，標題只代表「現在」，不代表底下數字都同一天。
   const lines = [
-    `${marketDate.m}/${marketDate.d}（${marketDate.weekday}）`,
-    `💰大盤: ${marketChangeStr}點，加權指數${commas(data.market.taiex)}點，成交量${commas(tradeValueYi)}億元。`,
-    `☀️宏全 ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`,
+    `${today.getMonth() + 1}/${today.getDate()}（${WEEKDAY[today.getDay()]}）`,
+    `💰大盤（${marketDate.m}/${marketDate.d}收盤）: ${marketChangeStr}點，加權指數${commas(data.market.taiex)}點，成交量${commas(tradeValueYi)}億元。`,
+    `☀️宏全（${hcDate.m}/${hcDate.d}收盤） ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`,
     ``,
     `💲匯率：(期交所盤後參考匯率，資料日期 ${forexDate.m}/${forexDate.d})`,
     `1美元 兌 台幣${data.forex.usd_twd.toFixed(4)}元`,

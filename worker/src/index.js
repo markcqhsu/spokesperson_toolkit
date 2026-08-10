@@ -8,39 +8,34 @@ function corsHeaders() {
   };
 }
 
-async function fetchText(url, opts) {
-  const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(`${url} -> ${res.status}`);
-  return res.text();
-}
-
 async function fetchJson(url, opts) {
   const res = await fetch(url, opts);
   if (!res.ok) throw new Error(`${url} -> ${res.status}`);
   return res.json();
 }
 
-function parseCsv(text) {
-  const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/);
-  const headers = lines[0].split(',');
-  return lines.slice(1).map((line) => {
-    const cols = line.split(',');
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = cols[i]; });
-    return obj;
-  });
-}
-
 async function fetchForex() {
-  const csv = await fetchText('https://www.taifex.com.tw/data_gov/taifex_open_data.asp?data_name=DailyForeignExchangeRates');
-  const rows = parseCsv(csv);
-  const latest = rows[rows.length - 1];
+  // rter.info only publishes USD-based pairs, so EUR/USD and CNY/TWD are
+  // derived by division — an exact identity, not an approximation.
+  const data = await fetchJson('https://tw.rter.info/capi.php');
+  const usdTwd = data.USDTWD;
+  const usdCny = data.USDCNY;
+  const usdEur = data.USDEUR;
+  if (!usdTwd || !usdCny || !usdEur) {
+    throw new Error('rter.info 缺少必要幣別資料 (USDTWD/USDCNY/USDEUR)');
+  }
+  // Each pair can be refreshed at a slightly different moment; use the
+  // oldest of the three so the reported "as of" time holds for all of them.
+  const toDate = (utc) => new Date(utc.replace(' ', 'T') + 'Z');
+  const oldest = [usdTwd.UTC, usdCny.UTC, usdEur.UTC]
+    .map(toDate)
+    .reduce((a, b) => (a < b ? a : b));
   return {
-    date: latest['日期'],
-    usd_twd: Number(latest['美元_新台幣(匯率)']),
-    eur_usd: Number(latest['歐元_美元(匯率)']),
-    usd_cny: Number(latest['美元_人民幣(匯率)']),
-    cny_twd: Number(latest['人民幣_新台幣(匯率)']),
+    as_of: oldest.toISOString(),
+    usd_twd: usdTwd.Exrate,
+    eur_usd: 1 / usdEur.Exrate,
+    usd_cny: usdCny.Exrate,
+    cny_twd: usdTwd.Exrate / usdCny.Exrate,
   };
 }
 

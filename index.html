@@ -127,7 +127,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.5.1</span>
+  <span class="version-badge">v0.6.0</span>
 </header>
 
 <div class="status-row">
@@ -140,7 +140,7 @@
   <textarea id="output" spellcheck="false"></textarea>
   <button class="copy-btn" id="copyBtn">複製全部內容</button>
   <div class="caveat">
-    ⚠️ 成交量／成交值為證交所公開統計口徑，跟人工查詢數字可能有 2~4% 落差；匯率為期交所每日盤後參考匯率（非即時報價），如需精確對時請人工核對後再送出。
+    ⚠️ 成交量／成交值為證交所公開統計口徑，跟人工查詢數字可能有 2~4% 落差；匯率、原油皆為第三方即時報價，如需精確對時請人工核對後再送出。
   </div>
   <!--
     資料來源說明：如果之後更換或新增任何資料源，
@@ -152,7 +152,7 @@
       <li>大盤指數／漲跌：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（同一天最快有資料，但無成交值欄位）</li>
       <li>大盤成交量／成交值：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊，發布較晚，日期會單獨標註）</li>
       <li>宏全（9939）股價／漲跌／成交量：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（跟大盤指數同一套官方系統）</li>
-      <li>匯率：<a href="https://data.gov.tw/dataset/11339" target="_blank" rel="noopener">期交所每日外幣參考匯率</a>（政府資料開放平臺，每日 19:00 盤後更新）</li>
+      <li>匯率：<a href="https://tw.rter.info/howto_currencyapi.php" target="_blank" rel="noopener">rter.info 即時匯率</a>（美元對台幣/人民幣/歐元為原始資料，歐元/美元與人民幣/台幣為除法換算，非估算值；報告文字已附上實際報價時間）</li>
       <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a>（上游快取報價，最長可能落後約 1 小時，報告文字已附上實際報價時間）</li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
@@ -205,6 +205,19 @@ function fmtTimeTaipei(isoString) {
   });
 }
 
+function fmtDateTimeTaipei(isoString) {
+  const parts = new Intl.DateTimeFormat('zh-TW', {
+    timeZone: 'Asia/Taipei',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(isoString));
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  return { m: get('month'), d: get('day'), hm: `${get('hour')}:${get('minute')}` };
+}
+
 function buildReport(data) {
   const today = new Date();
   // market.date / honchuan.date come from TWSE's realtime quote system
@@ -213,7 +226,7 @@ function buildReport(data) {
   const marketDate = fmtDateFromWestern(data.market.date);
   const tradeValueDate = fmtDateFromROC(data.market.trade_value_date);
   const hcDate = fmtDateFromWestern(data.honchuan.date);
-  const forexDate = fmtDateFromWestern(data.forex.date);
+  const forexTime = fmtDateTimeTaipei(data.forex.as_of);
 
   const marketChange = Math.trunc(data.market.change);
   const marketChangeStr = (marketChange >= 0 ? '+' : '') + marketChange;
@@ -240,7 +253,7 @@ function buildReport(data) {
     `💰大盤（${marketDate.m}/${marketDate.d}收盤）: ${marketChangeStr}點，加權指數${commas(data.market.taiex)}點，成交量${commas(tradeValueYi)}億元（${tradeValueDate.m}/${tradeValueDate.d}資料）。`,
     `☀️宏全（${hcDate.m}/${hcDate.d}收盤） ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`,
     ``,
-    `💲匯率：(期交所盤後參考匯率，資料日期 ${forexDate.m}/${forexDate.d})`,
+    `💲匯率：(即時匯率，資料時間 ${forexTime.m}/${forexTime.d} ${forexTime.hm})`,
     `1美元 兌 台幣${data.forex.usd_twd.toFixed(4)}元`,
     `1歐元 兌 美元${data.forex.eur_usd.toFixed(4)}元`,
     `1美元 兌 人民幣${data.forex.usd_cny.toFixed(4)}元`,

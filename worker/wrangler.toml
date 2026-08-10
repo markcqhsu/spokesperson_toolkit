@@ -1,0 +1,3 @@
+name = "spokesperson-toolkit-proxy"
+main = "src/index.js"
+compatibility_date = "2026-08-01"

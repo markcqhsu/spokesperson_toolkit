@@ -127,7 +127,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.3.1</span>
+  <span class="version-badge">v0.4.0</span>
 </header>
 
 <div class="status-row">
@@ -144,7 +144,7 @@
   </div>
   <!--
     資料來源說明：如果之後更換或新增任何資料源，
-    請同步更新下面這份清單，以及 scripts/fetch-data.mjs 裡對應的抓取邏輯。
+    請同步更新下面這份清單，以及 scripts/fetch-data.mjs 與 worker/src/index.js 裡對應的抓取邏輯。
   -->
   <details class="sources">
     <summary>📚 資料來源說明</summary>
@@ -155,6 +155,7 @@
       <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a></li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
+    <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 19:30）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取當下最新資料。</p>
   </details>
 </section>
 
@@ -233,27 +234,33 @@ function buildReport(data) {
   return lines.join('\n');
 }
 
-async function load() {
+const WORKER_URL = 'https://spokesperson-toolkit-proxy.kkboytest.workers.dev';
+
+async function load(live) {
   reloadBtn.disabled = true;
   statusEl.classList.remove('error');
-  statusEl.textContent = '載入中...';
+  statusEl.textContent = live ? '即時抓取中...' : '載入中...';
   try {
-    const res = await fetch(`data/latest.json?ts=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('data/latest.json 尚未產生（GitHub Actions 排程還沒跑過，或今天尚未更新）');
+    const url = live ? WORKER_URL : `data/latest.json?ts=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(live ? '即時抓取失敗，請稍後再試' : 'data/latest.json 尚未產生（GitHub Actions 排程還沒跑過，或今天尚未更新）');
+    }
     const data = await res.json();
+    if (data.error) throw new Error(`即時抓取失敗：${data.error}`);
     outputEl.value = buildReport(data);
     const genTime = new Date(data.generated_at).toLocaleString('zh-TW', { hour12: false });
-    statusEl.textContent = `資料更新時間：${genTime}`;
+    statusEl.textContent = `資料更新時間：${genTime}${live ? '（即時抓取）' : ''}`;
   } catch (err) {
     statusEl.textContent = `⚠️ ${err.message}`;
     statusEl.classList.add('error');
-    outputEl.value = '（尚無資料，請確認 GitHub Actions 排程是否已執行過一次，或手動觸發 workflow_dispatch）';
+    if (!live) outputEl.value = '（尚無資料，請確認 GitHub Actions 排程是否已執行過一次，或手動觸發 workflow_dispatch）';
   } finally {
     reloadBtn.disabled = false;
   }
 }
 
-reloadBtn.addEventListener('click', load);
+reloadBtn.addEventListener('click', () => load(true));
 
 copyBtn.addEventListener('click', async () => {
   let ok = false;
@@ -273,7 +280,7 @@ copyBtn.addEventListener('click', async () => {
   }, 1500);
 });
 
-load();
+load(false);
 </script>
 </body>
 </html>

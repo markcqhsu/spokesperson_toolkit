@@ -41,12 +41,45 @@
     margin: 0 0 8px;
   }
   .placeholder { color: #999; font-size: 0.9rem; }
+  .status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
   .status {
     font-size: 0.85rem;
     color: #888;
-    margin-bottom: 16px;
   }
   .status.error { color: #d9534f; }
+  .reload-btn {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    color: #007aff;
+    background: #fff;
+    border: 1px solid #cce0ff;
+    border-radius: 999px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+  .reload-btn:active { background: #eef5ff; }
+  .reload-btn:disabled { color: #aaa; border-color: #ddd; cursor: default; }
+  .sources {
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 0;
+  }
+  .sources summary {
+    cursor: pointer;
+    color: #666;
+  }
+  .sources ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+  }
+  .sources li { margin-bottom: 4px; }
+  .sources a { color: #007aff; }
   #output {
     width: 100%;
     box-sizing: border-box;
@@ -94,10 +127,13 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.2.3</span>
+  <span class="version-badge">v0.3.0</span>
 </header>
 
-<div class="status" id="status">載入中...</div>
+<div class="status-row">
+  <div class="status" id="status">載入中...</div>
+  <button class="reload-btn" id="reloadBtn">🔄 重新讀取</button>
+</div>
 
 <section>
   <h2>📋 每日報告文字（可直接編輯後複製）</h2>
@@ -106,12 +142,27 @@
   <div class="caveat">
     ⚠️ 成交量／成交值為證交所公開統計口徑，跟人工查詢數字可能有 2~4% 落差；匯率為期交所每日盤後參考匯率（非即時報價），如需精確對時請人工核對後再送出。
   </div>
+  <!--
+    資料來源說明：如果之後更換或新增任何資料源，
+    請同步更新下面這份清單，以及 scripts/fetch-data.mjs 裡對應的抓取邏輯。
+  -->
+  <details class="sources">
+    <summary>📚 資料來源說明</summary>
+    <ul>
+      <li>大盤指數／成交量：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊）</li>
+      <li>宏全（9939）股價：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（STOCK_DAY_ALL 上市個股日成交資訊）</li>
+      <li>匯率：<a href="https://data.gov.tw/dataset/11339" target="_blank" rel="noopener">期交所每日外幣參考匯率</a>（政府資料開放平臺，每日 19:00 盤後更新）</li>
+      <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a></li>
+      <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
+    </ul>
+  </details>
 </section>
 
 <script>
 const statusEl = document.getElementById('status');
 const outputEl = document.getElementById('output');
 const copyBtn = document.getElementById('copyBtn');
+const reloadBtn = document.getElementById('reloadBtn');
 
 const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -183,8 +234,11 @@ function buildReport(data) {
 }
 
 async function load() {
+  reloadBtn.disabled = true;
+  statusEl.classList.remove('error');
+  statusEl.textContent = '載入中...';
   try {
-    const res = await fetch('data/latest.json', { cache: 'no-store' });
+    const res = await fetch(`data/latest.json?ts=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('data/latest.json 尚未產生（GitHub Actions 排程還沒跑過，或今天尚未更新）');
     const data = await res.json();
     outputEl.value = buildReport(data);
@@ -194,8 +248,12 @@ async function load() {
     statusEl.textContent = `⚠️ ${err.message}`;
     statusEl.classList.add('error');
     outputEl.value = '（尚無資料，請確認 GitHub Actions 排程是否已執行過一次，或手動觸發 workflow_dispatch）';
+  } finally {
+    reloadBtn.disabled = false;
   }
 }
+
+reloadBtn.addEventListener('click', load);
 
 copyBtn.addEventListener('click', async () => {
   let ok = false;

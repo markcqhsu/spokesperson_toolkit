@@ -92,6 +92,12 @@ function closestPricePoint(points, targetTime) {
     }
   }
   if (!best) throw new Error('oilpriceapi past_week 回應裡沒有可用的資料點');
+  if (typeof best.price !== 'number') {
+    // Fail loudly instead of writing an undefined price into data/latest.json —
+    // this field name is guessed (oilpriceapi's past_week response shape isn't
+    // documented), so a wrong guess should break the run, not the report.
+    throw new Error(`oilpriceapi past_week 資料點沒有數字型別的 price 欄位: ${JSON.stringify(best)}`);
+  }
   return {
     price: best.price,
     change: best.changes?.['24h']?.amount ?? null,

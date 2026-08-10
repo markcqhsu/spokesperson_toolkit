@@ -127,7 +127,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.5.0</span>
+  <span class="version-badge">v0.5.1</span>
 </header>
 
 <div class="status-row">
@@ -153,7 +153,7 @@
       <li>大盤成交量／成交值：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊，發布較晚，日期會單獨標註）</li>
       <li>宏全（9939）股價／漲跌／成交量：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（跟大盤指數同一套官方系統）</li>
       <li>匯率：<a href="https://data.gov.tw/dataset/11339" target="_blank" rel="noopener">期交所每日外幣參考匯率</a>（政府資料開放平臺，每日 19:00 盤後更新）</li>
-      <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a></li>
+      <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a>（上游快取報價，最長可能落後約 1 小時，報告文字已附上實際報價時間）</li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
     <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 19:30）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取當下最新資料。</p>
@@ -194,6 +194,15 @@ function signed(n, digits) {
 
 function commas(n) {
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function fmtTimeTaipei(isoString) {
+  return new Date(isoString).toLocaleTimeString('zh-TW', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Taipei',
+  });
 }
 
 function buildReport(data) {
@@ -238,8 +247,8 @@ function buildReport(data) {
     `1人民幣 兌 台幣${data.forex.cny_twd.toFixed(4)}元`,
     ``,
     `🌐美股道瓊(${usDateStr}): ${usChangeStr}點`,
-    `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}`,
-    `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}`,
+    `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（報價時間 ${fmtTimeTaipei(oil.wti.as_of)}）`,
+    `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（報價時間 ${fmtTimeTaipei(oil.brent.as_of)}）`,
   ];
   return lines.join('\n');
 }

@@ -80,14 +80,19 @@ async function fetchOil(token) {
 }
 
 async function fetchDowJones() {
-  const data = await fetchJson('https://query1.finance.yahoo.com/v8/finance/chart/%5EDJI?range=5d&interval=1d', {
+  // No range/interval params: Yahoo defaults to range=1d, which gives the
+  // actual previous trading day's close via meta.previousClose. Adding
+  // range=5d shifts chartPreviousClose to the close from ~5 days back
+  // instead of yesterday, producing a wildly wrong "daily" change.
+  const data = await fetchJson('https://query1.finance.yahoo.com/v8/finance/chart/%5EDJI', {
     headers: { 'User-Agent': 'Mozilla/5.0' },
   });
   const meta = data.chart.result[0].meta;
+  const prevClose = meta.previousClose ?? meta.chartPreviousClose;
   return {
     price: meta.regularMarketPrice,
-    prev_close: meta.chartPreviousClose,
-    change: Math.round((meta.regularMarketPrice - meta.chartPreviousClose) * 100) / 100,
+    prev_close: prevClose,
+    change: Math.round((meta.regularMarketPrice - prevClose) * 100) / 100,
     as_of: new Date(meta.regularMarketTime * 1000).toISOString(),
   };
 }

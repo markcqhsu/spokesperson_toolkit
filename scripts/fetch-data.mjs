@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { fetchForex } from './forex.mjs';
 
 async function fetchJson(url, opts) {
   const res = await fetch(url, opts);
@@ -6,29 +7,24 @@ async function fetchJson(url, opts) {
   return res.json();
 }
 
-async function fetchForex() {
-  // rter.info only publishes USD-based pairs, so EUR/USD and CNY/TWD are
-  // derived by division — an exact identity, not an approximation.
-  const data = await fetchJson('https://tw.rter.info/capi.php');
-  const usdTwd = data.USDTWD;
-  const usdCny = data.USDCNY;
-  const usdEur = data.USDEUR;
-  if (!usdTwd || !usdCny || !usdEur) {
-    throw new Error('rter.info 缺少必要幣別資料 (USDTWD/USDCNY/USDEUR)');
+function taipeiDateString(date) {
+  return new Date(date.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+async function loadForex() {
+  // The 14:00 Taipei snapshot job (fetch-forex-snapshot.mjs) commits this
+  // file earlier in the same day; reuse it so the report shows the
+  // afternoon reference rate instead of whatever's live at 19:30.
+  try {
+    const snapshot = JSON.parse(fs.readFileSync('data/forex-1400.json', 'utf8'));
+    const today = taipeiDateString(new Date());
+    const snapshotDate = taipeiDateString(new Date(snapshot.as_of));
+    if (snapshotDate === today) return snapshot;
+    console.warn(`data/forex-1400.json 是 ${snapshotDate} 的舊資料，改用即時匯率`);
+  } catch (err) {
+    console.warn('讀不到 data/forex-1400.json，改用即時匯率:', err.message);
   }
-  // Each pair can be refreshed at a slightly different moment; use the
-  // oldest of the three so the reported "as of" time holds for all of them.
-  const toDate = (utc) => new Date(utc.replace(' ', 'T') + 'Z');
-  const oldest = [usdTwd.UTC, usdCny.UTC, usdEur.UTC]
-    .map(toDate)
-    .reduce((a, b) => (a < b ? a : b));
-  return {
-    as_of: oldest.toISOString(),
-    usd_twd: usdTwd.Exrate,
-    eur_usd: 1 / usdEur.Exrate,
-    usd_cny: usdCny.Exrate,
-    cny_twd: usdTwd.Exrate / usdCny.Exrate,
-  };
+  return fetchForex();
 }
 
 async function fetchRealtimeQuote(exCh) {
@@ -78,23 +74,40 @@ async function fetchHonChuan() {
   };
 }
 
-async function fetchOil(token) {
+// Picks the past_week entry whose timestamp is nearest targetTime. past_week
+// (not past_day) is used because on a Monday run the last US close is Friday
+// afternoon, more than 24h back — past_day's window wouldn't reach it.
+function closestPricePoint(points, targetTime) {
+  const list = Array.isArray(points) ? points : [points];
+  const target = new Date(targetTime).getTime();
+  let best = null;
+  let bestDiff = Infinity;
+  for (const p of list) {
+    const tsRaw = p.as_of ?? p.created_at ?? p.timestamp ?? p.period;
+    if (!tsRaw) continue;
+    const diff = Math.abs(new Date(tsRaw).getTime() - target);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = p;
+    }
+  }
+  if (!best) throw new Error('oilpriceapi past_week 回應裡沒有可用的資料點');
+  return {
+    price: best.price,
+    change: best.changes?.['24h']?.amount ?? null,
+    as_of: new Date(best.as_of ?? best.created_at ?? best.timestamp ?? best.period).toISOString(),
+  };
+}
+
+async function fetchOil(token, targetTime) {
   const headers = { Authorization: `Token ${token}` };
   const [wti, brent] = await Promise.all([
-    fetchJson('https://api.oilpriceapi.com/v1/prices/latest?by_code=WTI_USD', { headers }),
-    fetchJson('https://api.oilpriceapi.com/v1/prices/latest?by_code=BRENT_CRUDE_USD', { headers }),
+    fetchJson('https://api.oilpriceapi.com/v1/prices/past_week?by_code=WTI_USD', { headers }),
+    fetchJson('https://api.oilpriceapi.com/v1/prices/past_week?by_code=BRENT_CRUDE_USD', { headers }),
   ]);
   return {
-    wti: {
-      price: wti.data.price,
-      change: wti.data.changes?.['24h']?.amount ?? null,
-      as_of: wti.data.as_of,
-    },
-    brent: {
-      price: brent.data.price,
-      change: brent.data.changes?.['24h']?.amount ?? null,
-      as_of: brent.data.as_of,
-    },
+    wti: closestPricePoint(wti.data, targetTime),
+    brent: closestPricePoint(brent.data, targetTime),
   };
 }
 
@@ -120,13 +133,17 @@ async function main() {
   const token = process.env.OILPRICEAPI_TOKEN;
   if (!token) throw new Error('Missing OILPRICEAPI_TOKEN env var');
 
-  const [forex, market, honchuan, oil, usMarket] = await Promise.all([
-    fetchForex(),
+  const [forex, market, honchuan, usMarket] = await Promise.all([
+    loadForex(),
     fetchMarket(),
     fetchHonChuan(),
-    fetchOil(token),
     fetchDowJones(),
   ]);
+
+  // Oil is anchored to the same "as of" instant as the Dow Jones close
+  // (rather than oilpriceapi's live tick) so both reflect the same US
+  // trading-day close.
+  const oil = await fetchOil(token, usMarket.as_of);
 
   const result = {
     generated_at: new Date().toISOString(),

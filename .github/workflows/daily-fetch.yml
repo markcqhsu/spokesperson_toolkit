@@ -2,14 +2,36 @@ name: Daily data fetch
 
 on:
   schedule:
-    - cron: '30 11 * * 1-5'
+    - cron: '0 6 * * 1-5'  # 14:00 Taipei — forex snapshot
+    - cron: '30 11 * * 1-5'  # 19:30 Taipei — full fetch
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  forex-snapshot:
+    if: github.event.schedule == '0 6 * * 1-5'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: node scripts/fetch-forex-snapshot.mjs
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/forex-1400.json
+          git diff --staged --quiet || git commit -m "chore: update 14:00 forex snapshot $(date -u +%Y-%m-%d)"
+          git push
+
   fetch:
+    if: github.event.schedule == '30 11 * * 1-5' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

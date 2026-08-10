@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.6.1</span>
+  <span class="version-badge">v0.6.2</span>
 </header>
 
 <div class="status-row">
@@ -200,15 +200,6 @@ function commas(n) {
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-function fmtTimeTaipei(isoString) {
-  return new Date(isoString).toLocaleTimeString('zh-TW', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Taipei',
-  });
-}
-
 function fmtDateTimeTaipei(isoString) {
   const parts = new Intl.DateTimeFormat('zh-TW', {
     timeZone: 'Asia/Taipei',
@@ -242,10 +233,11 @@ function buildReport(data) {
 
   const us = data.us_market;
   const usChangeStr = (us.change >= 0 ? '+' : '') + Math.trunc(us.change);
-  const usDate = new Date(us.as_of);
-  const usDateStr = `${usDate.getMonth() + 1}/${usDate.getDate()}`;
+  const usTime = fmtDateTimeTaipei(us.as_of);
 
   const oil = data.oil;
+  const wtiTime = fmtDateTimeTaipei(oil.wti.as_of);
+  const brentTime = fmtDateTimeTaipei(oil.brent.as_of);
   const wtiChangeStr = oil.wti.change == null ? '' : `(${(oil.wti.change >= 0 ? '+' : '')}${oil.wti.change.toFixed(2)}美元)`;
   const brentChangeStr = oil.brent.change == null ? '' : `(${(oil.brent.change >= 0 ? '+' : '')}${oil.brent.change.toFixed(2)}美元)`;
 
@@ -263,9 +255,9 @@ function buildReport(data) {
     `1美元 兌 人民幣${data.forex.usd_cny.toFixed(4)}元`,
     `1人民幣 兌 台幣${data.forex.cny_twd.toFixed(4)}元`,
     ``,
-    `🌐美股道瓊(${usDateStr}): ${usChangeStr}點`,
-    `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（報價時間 ${fmtTimeTaipei(oil.wti.as_of)}）`,
-    `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（報價時間 ${fmtTimeTaipei(oil.brent.as_of)}）`,
+    `🌐美股道瓊: ${usChangeStr}點（報價時間 ${usTime.m}/${usTime.d} ${usTime.hm}）`,
+    `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（報價時間 ${wtiTime.m}/${wtiTime.d} ${wtiTime.hm}）`,
+    `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（報價時間 ${brentTime.m}/${brentTime.d} ${brentTime.hm}）`,
   ];
   return lines.join('\n');
 }

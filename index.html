@@ -93,7 +93,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.2.1</span>
+  <span class="version-badge">v0.2.2</span>
 </header>
 
 <div class="status" id="status">載入中...</div>
@@ -197,18 +197,21 @@ async function load() {
 }
 
 copyBtn.addEventListener('click', async () => {
+  let ok = false;
   try {
     await navigator.clipboard.writeText(outputEl.value);
-    copyBtn.textContent = '已複製 ✓';
-    copyBtn.classList.add('copied');
-    setTimeout(() => {
-      copyBtn.textContent = '複製全部內容';
-      copyBtn.classList.remove('copied');
-    }, 1500);
+    ok = true;
   } catch {
+    outputEl.focus();
     outputEl.select();
-    document.execCommand('copy');
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
   }
+  copyBtn.textContent = ok ? '已複製 ✓' : '複製失敗，請手動選取複製';
+  copyBtn.classList.toggle('copied', ok);
+  setTimeout(() => {
+    copyBtn.textContent = '複製全部內容';
+    copyBtn.classList.remove('copied');
+  }, 1500);
 });
 
 load();

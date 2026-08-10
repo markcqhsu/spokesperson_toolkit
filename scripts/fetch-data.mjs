@@ -105,16 +105,35 @@ function closestPricePoint(points, targetTime) {
   };
 }
 
+async function fetchLatestOilPrice(code, headers) {
+  const json = await fetchJson(`https://api.oilpriceapi.com/v1/prices/latest?by_code=${code}`, { headers });
+  return {
+    price: json.data.price,
+    change: json.data.changes?.['24h']?.amount ?? null,
+    as_of: json.data.as_of,
+  };
+}
+
+async function fetchOilForCode(code, targetTime, headers) {
+  try {
+    const history = await fetchJson(`https://api.oilpriceapi.com/v1/prices/past_week?by_code=${code}`, { headers });
+    return closestPricePoint(history.data, targetTime);
+  } catch (err) {
+    // past_week's field names are guessed (oilpriceapi's response shape isn't
+    // documented) — fall back to the known-good /latest endpoint (a live price,
+    // not aligned to the US close) instead of failing the whole run over it.
+    console.warn(`oilpriceapi past_week 抓 ${code} 失敗（${err.message}），改抓即時報價`);
+    return fetchLatestOilPrice(code, headers);
+  }
+}
+
 async function fetchOil(token, targetTime) {
   const headers = { Authorization: `Token ${token}` };
   const [wti, brent] = await Promise.all([
-    fetchJson('https://api.oilpriceapi.com/v1/prices/past_week?by_code=WTI_USD', { headers }),
-    fetchJson('https://api.oilpriceapi.com/v1/prices/past_week?by_code=BRENT_CRUDE_USD', { headers }),
+    fetchOilForCode('WTI_USD', targetTime, headers),
+    fetchOilForCode('BRENT_CRUDE_USD', targetTime, headers),
   ]);
-  return {
-    wti: closestPricePoint(wti.data, targetTime),
-    brent: closestPricePoint(brent.data, targetTime),
-  };
+  return { wti, brent };
 }
 
 async function fetchDowJones() {

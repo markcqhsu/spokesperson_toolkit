@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.7.0</span>
+  <span class="version-badge">v0.7.1</span>
 </header>
 
 <div class="status-row">
@@ -157,7 +157,7 @@
       <li>大盤成交量／成交值：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊，發布較晚，日期會單獨標註）</li>
       <li>宏全（9939）股價／漲跌／成交量：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（跟大盤指數同一套官方系統）</li>
       <li>匯率：<a href="https://tw.rter.info/howto_currencyapi.php" target="_blank" rel="noopener">rter.info 即時匯率</a>（美元對台幣/人民幣/歐元為原始資料，歐元/美元與人民幣/台幣為除法換算，非估算值；每日排程固定抓台北時間 14:00 的報價存下來，報告文字附上的是這個 14:00 報價時間，非產表當下時間）</li>
-      <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a>（每日排程從 past_week 逐日報價中，挑出跟美股道瓊收盤時間最接近的一筆，報告文字附上的是那筆報價的實際時間，用意是讓原油跟道瓊反映同一個美股交易日的收盤）</li>
+      <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a>（每日排程從 past_week 逐日報價中，挑出跟美股道瓊收盤時間最接近的一筆，報告文字附上的是那筆報價的實際時間，用意是讓原油跟道瓊反映同一個美股交易日的收盤；若 past_week 抓不到就自動退回即時報價，此時報價時間會跟道瓊收盤對不上）</li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
     <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 14:00 先存匯率、19:30 抓其他資料並組成報告）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取當下最新資料（此時匯率與原油皆為即時報價，非 14:00／美股收盤對齊）。</p>

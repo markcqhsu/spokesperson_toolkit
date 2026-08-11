@@ -85,7 +85,7 @@ async function fetchHonChuan() {
 // 經濟部能源署官方每日原油參考價（路透社資料），unit=day 回傳最近 22 個交易日、
 // 最新一筆在最前面。這是每日更新一次的參考價，SurDate 本身就是實際報價日期
 // （通常是查詢當下的前一個已結算交易日），不用另外對齊或猜測時間戳欄位。
-async function fetchOil() {
+async function fetchOilMoe() {
   const form = new FormData();
   form.append('unit', 'day');
   const res = await fetch('https://www2.moeaea.gov.tw/oil111/CrudeOil/CrudeOil/load', {
@@ -107,6 +107,42 @@ async function fetchOil() {
   };
 }
 
+// 鉅亨網的期貨走勢圖頁（so.cnyes.com/JavascriptGraphic/chartstudy.aspx）沒有獨立
+// 的資料 API，是把整年每日 OHLCV 直接以 `globalData.push([...])` 內嵌在頁面的
+// <script> 裡回傳；每一列格式是
+// [x座標, y座標, '日期YYYYMMDD', 開, 高, 低, 收, 量, 0, 圖表最大值, 圖表最小值,]。
+// 發言人習慣核對鉅亨網的報價，所以跟能源署的數字並列顯示，而不是互相取代——
+// 兩者都是每日收盤一次更新，不是逐秒跳動的即時報價。
+async function fetchCnyesDaily(code) {
+  const res = await fetch(
+    `https://so.cnyes.com/JavascriptGraphic/chartstudy.aspx?country=future&market=future&code=${code}`,
+    {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        Referer: `https://www.cnyes.com/futures/html5chart/${code}.html`,
+      },
+    },
+  );
+  if (!res.ok) throw new Error(`cnyes ${code} -> ${res.status}`);
+  const html = await res.text();
+  const rows = [...html.matchAll(/globalData\.push\(\[([^\]]*)\]\)/g)].map((m) => m[1].split(','));
+  if (rows.length < 2) throw new Error(`cnyes ${code} 沒有足夠的每日資料`);
+  const parseRow = (r) => ({ date: r[2].replace(/'/g, ''), close: Number(r[6]) });
+  const latest = parseRow(rows[rows.length - 1]);
+  const prev = parseRow(rows[rows.length - 2]);
+  const round2 = (n) => Math.round(n * 100) / 100;
+  return {
+    price: latest.close,
+    change: round2(latest.close - prev.close),
+    as_of: `${latest.date.slice(0, 4)}-${latest.date.slice(4, 6)}-${latest.date.slice(6, 8)}`,
+  };
+}
+
+async function fetchOilCnyes() {
+  const [wti, brent] = await Promise.all([fetchCnyesDaily('CLCON'), fetchCnyesDaily('IBCON')]);
+  return { wti, brent };
+}
+
 async function fetchDowJones() {
   // No range/interval params: Yahoo defaults to range=1d, which gives the
   // actual previous trading day's close via meta.previousClose. Adding
@@ -126,12 +162,13 @@ async function fetchDowJones() {
 }
 
 async function main() {
-  const [forex, market, honchuan, usMarket, oil] = await Promise.all([
+  const [forex, market, honchuan, usMarket, oilMoe, oilCnyes] = await Promise.all([
     loadForex(),
     fetchMarket(),
     fetchHonChuan(),
     fetchDowJones(),
-    fetchOil(),
+    fetchOilMoe(),
+    fetchOilCnyes(),
   ]);
 
   const result = {
@@ -139,7 +176,8 @@ async function main() {
     forex,
     market,
     honchuan,
-    oil,
+    oil_moe: oilMoe,
+    oil_cnyes: oilCnyes,
     us_market: usMarket,
   };
 

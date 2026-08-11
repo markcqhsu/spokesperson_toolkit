@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.10.0</span>
+  <span class="version-badge">v0.10.1</span>
 </header>
 
 <div class="status-row">
@@ -296,8 +296,8 @@ function buildReport(data) {
   }
   lines.push(
     oilLine('西德州', '能源署', data.oil_moe?.wti),
-    oilLine('西德州', '鉅亨網', data.oil_cnyes?.wti),
     oilLine('布侖特', '能源署', data.oil_moe?.brent),
+    oilLine('西德州', '鉅亨網', data.oil_cnyes?.wti),
     oilLine('布侖特', '鉅亨網', data.oil_cnyes?.brent),
   );
 

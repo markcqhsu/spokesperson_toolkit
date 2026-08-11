@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.7.2</span>
+  <span class="version-badge">v0.8.0</span>
 </header>
 
 <div class="status-row">
@@ -160,7 +160,7 @@
       <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a>（每日排程從 past_week 逐日報價中，挑出跟美股道瓊收盤時間最接近的一筆，報告文字附上的是那筆報價的實際時間，用意是讓原油跟道瓊反映同一個美股交易日的收盤；若 past_week 抓不到就自動退回即時報價，此時報價時間會跟道瓊收盤對不上）</li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
-    <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 14:00 先存匯率、19:30 抓其他資料並組成報告）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取當下最新資料（此時匯率與原油皆為即時報價，非 14:00／美股收盤對齊）。</p>
+    <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 14:00 先存匯率、19:30 抓其他資料並組成報告）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取當下最新資料（此時匯率與原油皆為即時報價，非 14:00／美股收盤對齊）。五個資料源（大盤指數、宏全股價、匯率、原油、美股道瓊）即時抓取時各自獨立，其中一個失敗不會讓其他四個一起失敗；失敗的項目報告文字裡會顯示暫時無法取得，並在上方狀態列列出是哪一項、失敗原因。</p>
   </details>
 </section>
 
@@ -213,52 +213,79 @@ function fmtDateTimeTaipei(isoString) {
   return { m: get('month'), d: get('day'), hm: `${get('hour')}:${get('minute')}` };
 }
 
+// data/latest.json (scheduled) is always fully populated — fetch-data.mjs
+// throws on any source failure rather than writing partial data. The live
+// Worker path can now return partial data (Promise.allSettled), so every
+// field here is read defensively and a missing one renders as a placeholder
+// line instead of throwing and blanking the whole report.
 function buildReport(data) {
   const today = new Date();
+  const lines = [`${today.getMonth() + 1}/${today.getDate()}（${WEEKDAY[today.getDay()]}）`];
+
   // market.date / honchuan.date come from TWSE's realtime quote system
   // (Western yyyymmdd); trade_value_date still comes from the slower
   // FMTQIK statistics mirror and keeps ROC-format dates.
-  const marketDate = fmtDateFromWestern(data.market.date);
-  const tradeValueDate = fmtDateFromROC(data.market.trade_value_date);
-  const hcDate = fmtDateFromWestern(data.honchuan.date);
-  const forexTime = fmtDateTimeTaipei(data.forex.as_of);
+  if (data.market) {
+    const marketDate = fmtDateFromWestern(data.market.date);
+    const tradeValueDate = fmtDateFromROC(data.market.trade_value_date);
+    const marketChange = Math.trunc(data.market.change);
+    const marketChangeStr = (marketChange >= 0 ? '+' : '') + marketChange;
+    const tradeValueYi = (data.market.trade_value / 1e8).toFixed(0);
+    lines.push(`💰大盤（${marketDate.m}/${marketDate.d}收盤）: ${marketChangeStr}點，加權指數${commas(data.market.taiex)}點，成交量${commas(tradeValueYi)}億元（${tradeValueDate.m}/${tradeValueDate.d}資料）。`);
+  } else {
+    lines.push(`💰大盤：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+  }
 
-  const marketChange = Math.trunc(data.market.change);
-  const marketChangeStr = (marketChange >= 0 ? '+' : '') + marketChange;
-  const tradeValueYi = (data.market.trade_value / 1e8).toFixed(0);
+  if (data.honchuan) {
+    const hc = data.honchuan;
+    const hcDate = fmtDateFromWestern(hc.date);
+    const hcChangeStr = (hc.change >= 0 ? '+' : '') + hc.change.toFixed(1);
+    const hcVolumeZhang = Math.round(hc.volume / 1000).toLocaleString('en-US');
+    lines.push(`☀️宏全（${hcDate.m}/${hcDate.d}收盤） ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`);
+  } else {
+    lines.push(`☀️宏全：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+  }
 
-  const hc = data.honchuan;
-  const hcChangeStr = (hc.change >= 0 ? '+' : '') + hc.change.toFixed(1);
-  const hcVolumeZhang = Math.round(hc.volume / 1000).toLocaleString('en-US');
+  lines.push('');
 
-  const us = data.us_market;
-  const usChangeStr = (us.change >= 0 ? '+' : '') + Math.trunc(us.change);
-  const usTime = fmtDateTimeTaipei(us.as_of);
+  if (data.forex) {
+    const forexTime = fmtDateTimeTaipei(data.forex.as_of);
+    lines.push(
+      `💲匯率：(即時匯率，資料時間 ${forexTime.m}/${forexTime.d} ${forexTime.hm})`,
+      `1美元 兌 台幣${data.forex.usd_twd.toFixed(4)}元`,
+      `1歐元 兌 美元${data.forex.eur_usd.toFixed(4)}元`,
+      `1美元 兌 人民幣${data.forex.usd_cny.toFixed(4)}元`,
+      `1人民幣 兌 台幣${data.forex.cny_twd.toFixed(4)}元`,
+    );
+  } else {
+    lines.push(`💲匯率：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+  }
 
-  const oil = data.oil;
-  const wtiTime = fmtDateTimeTaipei(oil.wti.as_of);
-  const brentTime = fmtDateTimeTaipei(oil.brent.as_of);
-  const wtiChangeStr = oil.wti.change == null ? '' : `(${(oil.wti.change >= 0 ? '+' : '')}${oil.wti.change.toFixed(2)}美元)`;
-  const brentChangeStr = oil.brent.change == null ? '' : `(${(oil.brent.change >= 0 ? '+' : '')}${oil.brent.change.toFixed(2)}美元)`;
+  lines.push('');
 
-  // 大盤、宏全各自的資料源更新時間點不同（例如宏全個股資料常比大盤加權
-  // 指數統計早發布），不能假設兩者一定是同一個交易日，所以每一行都
-  // 各自標註實際資料日期，標題只代表「現在」，不代表底下數字都同一天。
-  const lines = [
-    `${today.getMonth() + 1}/${today.getDate()}（${WEEKDAY[today.getDay()]}）`,
-    `💰大盤（${marketDate.m}/${marketDate.d}收盤）: ${marketChangeStr}點，加權指數${commas(data.market.taiex)}點，成交量${commas(tradeValueYi)}億元（${tradeValueDate.m}/${tradeValueDate.d}資料）。`,
-    `☀️宏全（${hcDate.m}/${hcDate.d}收盤） ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`,
-    ``,
-    `💲匯率：(即時匯率，資料時間 ${forexTime.m}/${forexTime.d} ${forexTime.hm})`,
-    `1美元 兌 台幣${data.forex.usd_twd.toFixed(4)}元`,
-    `1歐元 兌 美元${data.forex.eur_usd.toFixed(4)}元`,
-    `1美元 兌 人民幣${data.forex.usd_cny.toFixed(4)}元`,
-    `1人民幣 兌 台幣${data.forex.cny_twd.toFixed(4)}元`,
-    ``,
-    `🌐美股道瓊: ${usChangeStr}點（報價時間 ${usTime.m}/${usTime.d} ${usTime.hm}）`,
-    `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（報價時間 ${wtiTime.m}/${wtiTime.d} ${wtiTime.hm}）`,
-    `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（報價時間 ${brentTime.m}/${brentTime.d} ${brentTime.hm}）`,
-  ];
+  if (data.us_market) {
+    const us = data.us_market;
+    const usChangeStr = (us.change >= 0 ? '+' : '') + Math.trunc(us.change);
+    const usTime = fmtDateTimeTaipei(us.as_of);
+    lines.push(`🌐美股道瓊: ${usChangeStr}點（報價時間 ${usTime.m}/${usTime.d} ${usTime.hm}）`);
+  } else {
+    lines.push(`🌐美股道瓊：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+  }
+
+  if (data.oil) {
+    const oil = data.oil;
+    const wtiTime = fmtDateTimeTaipei(oil.wti.as_of);
+    const brentTime = fmtDateTimeTaipei(oil.brent.as_of);
+    const wtiChangeStr = oil.wti.change == null ? '' : `(${(oil.wti.change >= 0 ? '+' : '')}${oil.wti.change.toFixed(2)}美元)`;
+    const brentChangeStr = oil.brent.change == null ? '' : `(${(oil.brent.change >= 0 ? '+' : '')}${oil.brent.change.toFixed(2)}美元)`;
+    lines.push(
+      `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（報價時間 ${wtiTime.m}/${wtiTime.d} ${wtiTime.hm}）`,
+      `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（報價時間 ${brentTime.m}/${brentTime.d} ${brentTime.hm}）`,
+    );
+  } else {
+    lines.push(`原油期貨：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+  }
+
   return lines.join('\n');
 }
 
@@ -295,7 +322,16 @@ async function load(live) {
     if (data?.error) throw new Error(`即時抓取失敗：${data.error}`);
     outputEl.value = buildReport(data);
     const genTime = new Date(data.generated_at).toLocaleString('zh-TW', { hour12: false });
-    statusEl.textContent = `資料更新時間：${genTime}${live ? '（即時抓取）' : ''}`;
+    // Worker returns 200 with partial data + `errors` when only some sources
+    // failed (Promise.allSettled) — surface exactly which ones and why,
+    // instead of a pass/fail status that hides which numbers to distrust.
+    const failedReasons = data?.errors ? Object.values(data.errors) : [];
+    if (failedReasons.length) {
+      statusEl.textContent = `⚠️ 部分即時資料抓取失敗：${failedReasons.join('；')}（其餘資料更新時間：${genTime}）`;
+      statusEl.classList.add('error');
+    } else {
+      statusEl.textContent = `資料更新時間：${genTime}${live ? '（即時抓取）' : ''}`;
+    }
   } catch (err) {
     statusEl.textContent = `⚠️ ${err.message}`;
     statusEl.classList.add('error');

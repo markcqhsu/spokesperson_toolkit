@@ -124,6 +124,17 @@ async function fetchDowJones() {
   };
 }
 
+// Human-readable label per source, used to prefix that source's error message
+// so a failure in one (e.g. TWSE's realtime system being down) is attributed
+// to the right line instead of reading as a generic, unexplained failure.
+const SOURCE_LABELS = {
+  forex: '匯率',
+  market: '大盤指數',
+  honchuan: '宏全股價',
+  oil: '原油期貨',
+  us_market: '美股道瓊',
+};
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -131,7 +142,11 @@ export default {
     }
 
     try {
-      const [forex, market, honchuan, oil, usMarket] = await Promise.all([
+      // Promise.allSettled (not Promise.all) so one source failing — e.g.
+      // mis.twse.com.tw having no data outside trading hours — doesn't wipe
+      // out the other four sources that fetched fine.
+      const keys = ['forex', 'market', 'honchuan', 'oil', 'us_market'];
+      const settled = await Promise.allSettled([
         fetchForex(),
         fetchMarket(),
         fetchHonChuan(),
@@ -139,14 +154,17 @@ export default {
         fetchDowJones(),
       ]);
 
-      const result = {
-        generated_at: new Date().toISOString(),
-        forex,
-        market,
-        honchuan,
-        oil,
-        us_market: usMarket,
-      };
+      const result = { generated_at: new Date().toISOString() };
+      const errors = {};
+      settled.forEach((outcome, i) => {
+        const key = keys[i];
+        if (outcome.status === 'fulfilled') {
+          result[key] = outcome.value;
+        } else {
+          errors[key] = `${SOURCE_LABELS[key]}：${outcome.reason.message}`;
+        }
+      });
+      if (Object.keys(errors).length) result.errors = errors;
 
       return new Response(JSON.stringify(result, null, 2), { headers: corsHeaders() });
     } catch (err) {

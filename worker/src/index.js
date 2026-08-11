@@ -14,6 +14,23 @@ async function fetchJson(url, opts) {
   return res.json();
 }
 
+// mis.twse.com.tw intermittently returns Cloudflare 520s (edge-to-edge
+// hiccup between our Worker and TWSE's own Cloudflare-fronted host) even
+// though the same request succeeds seconds later from a plain client.
+// Retry a couple of times before surfacing the failure to the user.
+async function fetchJsonWithRetry(url, opts, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchJson(url, opts);
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function fetchForex() {
   // rter.info only publishes USD-based pairs, so EUR/USD and CNY/TWD are
   // derived by division — an exact identity, not an approximation.
@@ -52,7 +69,7 @@ async function fetchRealtimeQuote(exCh) {
   // realtime module and TWSE's own website widgets use). Gives same-day
   // price/change well before the OpenAPI/FMTQIK mirrors publish.
   const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${exCh}&_=${Date.now()}`;
-  const json = await fetchJson(url, {
+  const json = await fetchJsonWithRetry(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0',
       Referer: 'https://mis.twse.com.tw/stock/index.jsp',

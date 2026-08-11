@@ -39,6 +39,14 @@ async function fetchForex() {
   };
 }
 
+// TWSE returns "-" (not empty/absent) for z/y before a stock's first trade
+// of the day, e.g. pre-market. "-" is truthy, so a plain !quote.z check
+// misses it, and Number("-") is NaN — silently producing a "null" price
+// downstream instead of a clear error.
+function isValidQuoteNumber(v) {
+  return v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
+}
+
 async function fetchRealtimeQuote(exCh) {
   // TWSE's own official realtime quote system (same one twstock's
   // realtime module and TWSE's own website widgets use). Gives same-day
@@ -51,7 +59,7 @@ async function fetchRealtimeQuote(exCh) {
     },
   });
   const quote = json.msgArray?.[0];
-  if (json.rtcode !== '0000' || !quote || !quote.z || !quote.y) {
+  if (json.rtcode !== '0000' || !quote || !isValidQuoteNumber(quote.z) || !isValidQuoteNumber(quote.y)) {
     throw new Error(`mis.twse.com.tw 沒有 ${exCh} 的即時資料`);
   }
   return quote;

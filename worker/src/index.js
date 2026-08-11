@@ -111,23 +111,27 @@ async function fetchHonChuan() {
   };
 }
 
-async function fetchOil(token) {
-  const headers = { Authorization: `Token ${token}` };
-  const [wti, brent] = await Promise.all([
-    fetchJson('https://api.oilpriceapi.com/v1/prices/latest?by_code=WTI_USD', { headers }),
-    fetchJson('https://api.oilpriceapi.com/v1/prices/latest?by_code=BRENT_CRUDE_USD', { headers }),
-  ]);
+// 經濟部能源署官方每日原油參考價（路透社資料）。oilpriceapi 的 /latest 實測會卡在
+// 舊快照好幾個小時不動，看起來即時實則不準；能源署這份本來就是每日更新一次的
+// 參考價，SurDate 就是實際報價日期，不用假裝是即時報價，改用同一個端點取代
+// oilpriceapi，排程與「重新讀取」拿到的都是同一份、有明確日期標示的資料。
+async function fetchOil() {
+  const form = new FormData();
+  form.append('unit', 'day');
+  const json = await fetchJsonWithRetry('https://www2.moeaea.gov.tw/oil111/CrudeOil/CrudeOil/load', {
+    method: 'POST',
+    body: form,
+  });
+  const rows = json.data?.crudeoil;
+  if (!Array.isArray(rows) || rows.length < 2) {
+    throw new Error('能源署原油資料筆數不足，無法算漲跌');
+  }
+  const [latest, prev] = rows;
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const asOf = latest.SurDate.replace(/\//g, '-');
   return {
-    wti: {
-      price: wti.data.price,
-      change: wti.data.changes?.['24h']?.amount ?? null,
-      as_of: wti.data.as_of,
-    },
-    brent: {
-      price: brent.data.price,
-      change: brent.data.changes?.['24h']?.amount ?? null,
-      as_of: brent.data.as_of,
-    },
+    wti: { price: latest.WestT, change: round2(latest.WestT - prev.WestT), as_of: asOf },
+    brent: { price: latest.Burant, change: round2(latest.Burant - prev.Burant), as_of: asOf },
   };
 }
 
@@ -161,7 +165,7 @@ const SOURCE_LABELS = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() });
     }
@@ -175,7 +179,7 @@ export default {
         fetchForex(),
         fetchMarket(),
         fetchHonChuan(),
-        fetchOil(env.OILPRICEAPI_TOKEN),
+        fetchOil(),
         fetchDowJones(),
       ]);
 

@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.8.2</span>
+  <span class="version-badge">v0.9.0</span>
 </header>
 
 <div class="status-row">
@@ -144,7 +144,7 @@
   <textarea id="output" spellcheck="false"></textarea>
   <button class="copy-btn" id="copyBtn">複製全部內容</button>
   <div class="caveat">
-    ⚠️ 成交量／成交值為證交所公開統計口徑，跟人工查詢數字可能有 2~4% 落差；匯率、原油皆為第三方即時報價，如需精確對時請人工核對後再送出。
+    ⚠️ 成交量／成交值為證交所公開統計口徑，跟人工查詢數字可能有 2~4% 落差；匯率為第三方即時報價，原油為能源署每日參考價（非即時、每天更新一次），如需精確對時請人工核對後再送出。
   </div>
   <!--
     資料來源說明：如果之後更換或新增任何資料源，
@@ -157,10 +157,10 @@
       <li>大盤成交量／成交值：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊，發布較晚，日期會單獨標註）</li>
       <li>宏全（9939）股價／漲跌／成交量：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（跟大盤指數同一套官方系統）</li>
       <li>匯率：<a href="https://tw.rter.info/howto_currencyapi.php" target="_blank" rel="noopener">rter.info 即時匯率</a>（美元對台幣/人民幣/歐元為原始資料，歐元/美元與人民幣/台幣為除法換算，非估算值；每日排程固定抓台北時間 14:00 的報價存下來，報告文字附上的是這個 14:00 報價時間，非產表當下時間）</li>
-      <li>原油期貨（WTI／布侖特）：<a href="https://www.oilpriceapi.com/" target="_blank" rel="noopener">oilpriceapi.com</a>（每日排程從 past_week 逐日報價中，挑出跟美股道瓊收盤時間最接近的一筆，報告文字附上的是那筆報價的實際時間，用意是讓原油跟道瓊反映同一個美股交易日的收盤；若 past_week 抓不到就自動退回即時報價，此時報價時間會跟道瓊收盤對不上）</li>
+      <li>原油期貨（WTI／布侖特）：<a href="https://www2.moeaea.gov.tw/oil111/CrudeOil/Price" target="_blank" rel="noopener">經濟部能源署原油價格公告</a>（路透社資料，官方每日更新一次的參考價，非即時報價；報告文字附上的日期就是該報價實際結算的日期，通常是查詢當下的前一個已結算交易日。排程與「重新讀取」用的是同一個端點，兩者拿到的資料一致）</li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
-    <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 14:00 先存匯率、19:30 抓其他資料並組成報告）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取當下最新資料（此時匯率與原油皆為即時報價，非 14:00／美股收盤對齊）。五個資料源（大盤指數、宏全股價、匯率、原油、美股道瓊）即時抓取時各自獨立，其中一個失敗不會讓其他四個一起失敗；失敗的項目報告文字裡會顯示暫時無法取得，並在上方狀態列列出是哪一項、失敗原因。</p>
+    <p style="margin: 10px 0 0;">頁面開啟時顯示的是每日排程（GitHub Actions，交易日 14:00 先存匯率、19:30 抓其他資料並組成報告）預先抓好的資料；點「🔄 重新讀取」則是即時透過 Cloudflare Worker 重新向以上來源抓取資料（此時匯率為當下即時報價，非 14:00 對齊；原油因為來源本身就是每日更新一次的參考價，重新讀取拿到的日期通常會跟排程時一樣，不會變成更新的報價）。五個資料源（大盤指數、宏全股價、匯率、原油、美股道瓊）即時抓取時各自獨立，其中一個失敗不會讓其他四個一起失敗；失敗的項目報告文字裡會顯示暫時無法取得，並在上方狀態列列出是哪一項、失敗原因。</p>
   </details>
 </section>
 
@@ -211,6 +211,19 @@ function fmtDateTimeTaipei(isoString) {
   }).formatToParts(new Date(isoString));
   const get = (type) => parts.find((p) => p.type === type)?.value;
   return { m: get('month'), d: get('day'), hm: `${get('hour')}:${get('minute')}` };
+}
+
+// Oil's as_of is a bare settlement date (no time-of-day — the source updates
+// once a day), so it gets its own date-only formatter instead of reusing
+// fmtDateTimeTaipei and showing a fabricated "00:00".
+function fmtDateOnlyTaipei(isoString) {
+  const parts = new Intl.DateTimeFormat('zh-TW', {
+    timeZone: 'Asia/Taipei',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(new Date(isoString));
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  return { m: get('month'), d: get('day') };
 }
 
 // data/latest.json (scheduled) is always fully populated — fetch-data.mjs
@@ -274,13 +287,13 @@ function buildReport(data) {
 
   if (data.oil) {
     const oil = data.oil;
-    const wtiTime = fmtDateTimeTaipei(oil.wti.as_of);
-    const brentTime = fmtDateTimeTaipei(oil.brent.as_of);
+    const wtiDate = fmtDateOnlyTaipei(oil.wti.as_of);
+    const brentDate = fmtDateOnlyTaipei(oil.brent.as_of);
     const wtiChangeStr = oil.wti.change == null ? '' : `(${(oil.wti.change >= 0 ? '+' : '')}${oil.wti.change.toFixed(2)}美元)`;
     const brentChangeStr = oil.brent.change == null ? '' : `(${(oil.brent.change >= 0 ? '+' : '')}${oil.brent.change.toFixed(2)}美元)`;
     lines.push(
-      `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（報價時間 ${wtiTime.m}/${wtiTime.d} ${wtiTime.hm}）`,
-      `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（報價時間 ${brentTime.m}/${brentTime.d} ${brentTime.hm}）`,
+      `西德州原油期貨：${oil.wti.price.toFixed(2)}美元/桶${wtiChangeStr}（能源署 ${wtiDate.m}/${wtiDate.d} 收盤價）`,
+      `布侖特原油期貨：${oil.brent.price.toFixed(2)}美元/桶${brentChangeStr}（能源署 ${brentDate.m}/${brentDate.d} 收盤價）`,
     );
   } else {
     lines.push(`原油期貨：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);

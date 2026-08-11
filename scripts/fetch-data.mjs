@@ -82,66 +82,29 @@ async function fetchHonChuan() {
   };
 }
 
-// Picks the past_week entry whose timestamp is nearest targetTime. past_week
-// (not past_day) is used because on a Monday run the last US close is Friday
-// afternoon, more than 24h back — past_day's window wouldn't reach it.
-function closestPricePoint(points, targetTime) {
-  const list = Array.isArray(points) ? points : [points];
-  const target = new Date(targetTime).getTime();
-  let best = null;
-  let bestDiff = Infinity;
-  for (const p of list) {
-    const tsRaw = p.as_of ?? p.created_at ?? p.timestamp ?? p.period;
-    if (!tsRaw) continue;
-    const diff = Math.abs(new Date(tsRaw).getTime() - target);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = p;
-    }
+// 經濟部能源署官方每日原油參考價（路透社資料），unit=day 回傳最近 22 個交易日、
+// 最新一筆在最前面。這是每日更新一次的參考價，SurDate 本身就是實際報價日期
+// （通常是查詢當下的前一個已結算交易日），不用另外對齊或猜測時間戳欄位。
+async function fetchOil() {
+  const form = new FormData();
+  form.append('unit', 'day');
+  const res = await fetch('https://www2.moeaea.gov.tw/oil111/CrudeOil/CrudeOil/load', {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) throw new Error(`能源署原油資料 -> ${res.status}`);
+  const json = await res.json();
+  const rows = json.data?.crudeoil;
+  if (!Array.isArray(rows) || rows.length < 2) {
+    throw new Error('能源署原油資料筆數不足，無法算漲跌');
   }
-  if (!best) throw new Error('oilpriceapi past_week 回應裡沒有可用的資料點');
-  if (typeof best.price !== 'number') {
-    // Fail loudly instead of writing an undefined price into data/latest.json —
-    // this field name is guessed (oilpriceapi's past_week response shape isn't
-    // documented), so a wrong guess should break the run, not the report.
-    throw new Error(`oilpriceapi past_week 資料點沒有數字型別的 price 欄位: ${JSON.stringify(best)}`);
-  }
+  const [latest, prev] = rows;
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const asOf = latest.SurDate.replace(/\//g, '-');
   return {
-    price: best.price,
-    change: best.changes?.['24h']?.amount ?? null,
-    as_of: new Date(best.as_of ?? best.created_at ?? best.timestamp ?? best.period).toISOString(),
+    wti: { price: latest.WestT, change: round2(latest.WestT - prev.WestT), as_of: asOf },
+    brent: { price: latest.Burant, change: round2(latest.Burant - prev.Burant), as_of: asOf },
   };
-}
-
-async function fetchLatestOilPrice(code, headers) {
-  const json = await fetchJson(`https://api.oilpriceapi.com/v1/prices/latest?by_code=${code}`, { headers });
-  return {
-    price: json.data.price,
-    change: json.data.changes?.['24h']?.amount ?? null,
-    as_of: json.data.as_of,
-  };
-}
-
-async function fetchOilForCode(code, targetTime, headers) {
-  try {
-    const history = await fetchJson(`https://api.oilpriceapi.com/v1/prices/past_week?by_code=${code}`, { headers });
-    return closestPricePoint(history.data, targetTime);
-  } catch (err) {
-    // past_week's field names are guessed (oilpriceapi's response shape isn't
-    // documented) — fall back to the known-good /latest endpoint (a live price,
-    // not aligned to the US close) instead of failing the whole run over it.
-    console.warn(`oilpriceapi past_week 抓 ${code} 失敗（${err.message}），改抓即時報價`);
-    return fetchLatestOilPrice(code, headers);
-  }
-}
-
-async function fetchOil(token, targetTime) {
-  const headers = { Authorization: `Token ${token}` };
-  const [wti, brent] = await Promise.all([
-    fetchOilForCode('WTI_USD', targetTime, headers),
-    fetchOilForCode('BRENT_CRUDE_USD', targetTime, headers),
-  ]);
-  return { wti, brent };
 }
 
 async function fetchDowJones() {
@@ -163,20 +126,13 @@ async function fetchDowJones() {
 }
 
 async function main() {
-  const token = process.env.OILPRICEAPI_TOKEN;
-  if (!token) throw new Error('Missing OILPRICEAPI_TOKEN env var');
-
-  const [forex, market, honchuan, usMarket] = await Promise.all([
+  const [forex, market, honchuan, usMarket, oil] = await Promise.all([
     loadForex(),
     fetchMarket(),
     fetchHonChuan(),
     fetchDowJones(),
+    fetchOil(),
   ]);
-
-  // Oil is anchored to the same "as of" instant as the Dow Jones close
-  // (rather than oilpriceapi's live tick) so both reflect the same US
-  // trading-day close.
-  const oil = await fetchOil(token, usMarket.as_of);
 
   const result = {
     generated_at: new Date().toISOString(),

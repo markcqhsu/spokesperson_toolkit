@@ -41,8 +41,6 @@ jobs:
           node-version: 20
 
       - run: node scripts/fetch-data.mjs
-        env:
-          OILPRICEAPI_TOKEN: ${{ secrets.OILPRICEAPI_TOKEN }}
 
       - name: Commit and push if changed
         run: |

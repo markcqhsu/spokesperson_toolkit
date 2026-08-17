@@ -41,6 +41,8 @@ jobs:
           node-version: 20
 
       - run: node scripts/fetch-data.mjs
+        env:
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
 
       - name: Commit and push if changed
         run: |

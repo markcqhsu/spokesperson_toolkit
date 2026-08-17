@@ -24,6 +24,11 @@
     margin-bottom: 20px;
   }
   h1 { font-size: 1.4rem; margin: 0; }
+  .version-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .version-badge {
     font-size: 0.75rem;
     color: #888;
@@ -32,6 +37,12 @@
     padding: 2px 10px;
     background: #fff;
   }
+  .changelog-link {
+    font-size: 0.75rem;
+    color: #007aff;
+    text-decoration: none;
+  }
+  .changelog-link:hover { text-decoration: underline; }
   section {
     background: #fff;
     border-radius: 12px;
@@ -131,8 +142,20 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.11.1</span>
+  <div class="version-info">
+    <span class="version-badge">v0.12.0</span>
+    <a href="#changelog" class="changelog-link">改版紀錄</a>
+  </div>
 </header>
+
+<section class="changelog-section">
+  <details class="sources" id="changelog">
+    <summary>📝 改版紀錄</summary>
+    <ul>
+      <li><strong>v0.12.0</strong>：大盤指數、宏全（9939）股價／成交量改用富果（Fugle）行情 API，取代原本 mis.twse.com.tw ＋ FMTQIK 兩個來源；成交量不再落後一個交易日，跟指數保證同一天。</li>
+    </ul>
+  </details>
+</section>
 
 <div class="status-row">
   <div class="status" id="status">載入中...</div>
@@ -144,7 +167,7 @@
   <textarea id="output" spellcheck="false"></textarea>
   <button class="copy-btn" id="copyBtn">複製全部內容</button>
   <div class="caveat">
-    ⚠️ 成交量／成交值為證交所公開統計口徑，跟人工查詢數字可能有 2~4% 落差；匯率為第三方即時報價，原油為能源署每日參考價（非即時、每天更新一次），如需精確對時請人工核對後再送出。
+    ⚠️ 成交量／成交值來自富果（Fugle）行情 API，口徑不含零股及鉅額交易，跟證交所公開統計數字可能有落差；匯率為第三方即時報價，原油為能源署每日參考價（非即時、每天更新一次），如需精確對時請人工核對後再送出。
   </div>
   <!--
     資料來源說明：如果之後更換或新增任何資料源，
@@ -153,9 +176,8 @@
   <details class="sources">
     <summary>📚 資料來源說明</summary>
     <ul>
-      <li>大盤指數／漲跌：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（同一天最快有資料，但無成交值欄位）</li>
-      <li>大盤成交量／成交值：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊，發布較晚，日期會單獨標註）</li>
-      <li>宏全（9939）股價／漲跌／成交量：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（跟大盤指數同一套官方系統）</li>
+      <li>大盤指數／漲跌／成交量／成交值：<a href="https://developer.fugle.tw/docs/data/intro" target="_blank" rel="noopener">富果（Fugle）行情 API</a>（時報資訊與 Fugle 提供，代碼 IX0001「發行量加權股價指數」，指數跟成交值來自同一筆報價，保證同一天；口徑不含零股及鉅額交易）</li>
+      <li>宏全（9939）股價／漲跌／成交量：<a href="https://developer.fugle.tw/docs/data/intro" target="_blank" rel="noopener">富果（Fugle）行情 API</a>（跟大盤指數同一套資料源）</li>
       <li>匯率：<a href="https://tw.rter.info/howto_currencyapi.php" target="_blank" rel="noopener">rter.info 即時匯率</a>（美元對台幣/人民幣/歐元為原始資料，歐元/美元與人民幣/台幣為除法換算，非估算值；每日排程固定抓台北時間 14:00 的報價存下來，報告文字附上的是這個 14:00 報價時間，非產表當下時間）</li>
       <li>原油現貨（WTI／布侖特，能源署）：<a href="https://www2.moeaea.gov.tw/oil111/CrudeOil/Price" target="_blank" rel="noopener">經濟部能源署原油價格公告</a>（路透社資料，官方每日更新一次的參考價，非即時報價；報告文字附上的日期就是該報價實際結算的日期，通常是查詢當下的前一個已結算交易日）</li>
       <li>原油期貨（WTI／布侖特，鉅亨網）：<a href="https://www.cnyes.com/futures/html5chart/CLCON.html" target="_blank" rel="noopener">鉅亨網連續月紐約輕原油</a>／<a href="https://www.cnyes.com/futures/html5chart/IBCON.html" target="_blank" rel="noopener">近月倫敦布蘭特原油</a>技術線圖頁（同樣是每日收盤一次更新，非即時；跟能源署並列顯示是因為發言人習慣同時核對這兩個來源，不是互相取代或校正）</li>
@@ -180,15 +202,6 @@ function fmtDateFromWestern(yyyymmdd) {
   const d = Number(yyyymmdd.slice(6, 8));
   const dt = new Date(y, m - 1, d);
   return { m, d, weekday: WEEKDAY[dt.getDay()], iso: `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` };
-}
-
-function fmtDateFromROC(rocYyyymmdd) {
-  // rocYyyymmdd like "1150807" (民國年)
-  const rocY = Number(rocYyyymmdd.slice(0, 3));
-  const m = Number(rocYyyymmdd.slice(3, 5));
-  const d = Number(rocYyyymmdd.slice(5, 7));
-  const y = rocY + 1911;
-  return fmtDateFromWestern(`${y}${String(m).padStart(2,'0')}${String(d).padStart(2,'0')}`);
 }
 
 function signed(n, digits) {
@@ -247,17 +260,16 @@ function buildReport(data) {
   const today = new Date();
   const lines = [`📊 ${today.getMonth() + 1}/${today.getDate()} 市場行情快報`, ''];
 
-  // market.date / honchuan.date come from TWSE's realtime quote system
-  // (Western yyyymmdd); trade_value_date still comes from the slower
-  // FMTQIK statistics mirror and keeps ROC-format dates.
+  // market.date / honchuan.date 都是富果（Fugle）同一筆報價裡的日期
+  // （Western yyyymmdd），加權指數跟成交量現在保證是同一天，不用再分開標日期。
   lines.push('🇹🇼 台股');
   if (data.market) {
-    const tradeValueDate = fmtDateFromROC(data.market.trade_value_date);
+    const marketDate = fmtDateFromWestern(data.market.date);
     const marketChange = Math.trunc(data.market.change);
     const taiexStr = Number(data.market.taiex).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const tradeValueYi = (data.market.trade_value / 1e8).toFixed(0);
     lines.push(`💰 加權指數｜${taiexStr} 點 ${arrowStr(marketChange, 0)} 點`);
-    lines.push(`　成交量｜${commas(tradeValueYi)} 億元（${tradeValueDate.m}/${tradeValueDate.d}）`);
+    lines.push(`　成交量｜${commas(tradeValueYi)} 億元（${marketDate.m}/${marketDate.d}）`);
   } else {
     lines.push(`💰 加權指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
@@ -343,8 +355,8 @@ async function load(live) {
     const url = live ? WORKER_URL : `data/latest.json?ts=${Date.now()}`;
     const res = await fetch(url, { cache: 'no-store' });
     // Even on a non-2xx status the Worker's body carries the real cause
-    // (e.g. `{"error":"mis.twse.com.tw 沒有 tse_t00.tw 的即時資料"}`), so
-    // read it before deciding what to show instead of only checking res.ok.
+    // (e.g. `{"error":"Fugle 沒有 IX0001 的即時資料"}`), so read it before
+    // deciding what to show instead of only checking res.ok.
     let data = null;
     try {
       data = await res.json();

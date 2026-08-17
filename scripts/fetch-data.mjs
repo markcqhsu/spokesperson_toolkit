@@ -27,58 +27,41 @@ async function loadForex() {
   return fetchForex();
 }
 
-// TWSE returns "-" (not empty/absent) for z/y before a stock's first trade
-// of the day, e.g. pre-market. "-" is truthy, so a plain !quote.z check
-// misses it, and Number("-") is NaN — silently producing a "null" price
-// downstream instead of a clear error.
-function isValidQuoteNumber(v) {
-  return v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
-}
-
-async function fetchRealtimeQuote(exCh) {
-  // TWSE's own official realtime quote system (same one twstock's
-  // realtime module and TWSE's own website widgets use). Gives same-day
-  // price/change well before the OpenAPI/FMTQIK mirrors publish.
-  const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${exCh}&_=${Date.now()}`;
-  const json = await fetchJson(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-      Referer: 'https://mis.twse.com.tw/stock/index.jsp',
-    },
+// 富果（Fugle）行情 API 的 intraday quote 端點同時支援個股（EQUITY）跟指數
+// （INDEX），一次就能拿到報價、漲跌、當天累計成交值/量，不用再像以前那樣拼
+// mis.twse.com.tw（即時報價，無成交值）加 FMTQIK（成交值，常常延後一個交易
+// 日才公布）兩個來源——這也是為什麼以前加權指數是今天、成交量卻是前幾天的
+// 落差在這個資料源就不會發生了。IX0001 是「發行量加權股價指數」的代碼。
+async function fetchFugleQuote(symbol) {
+  const apiKey = process.env.FUGLE_API_KEY;
+  if (!apiKey) throw new Error('缺少 FUGLE_API_KEY 環境變數');
+  const json = await fetchJson(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${symbol}`, {
+    headers: { 'X-API-KEY': apiKey },
   });
-  const quote = json.msgArray?.[0];
-  if (json.rtcode !== '0000' || !quote || !isValidQuoteNumber(quote.z) || !isValidQuoteNumber(quote.y)) {
-    throw new Error(`mis.twse.com.tw 沒有 ${exCh} 的即時資料`);
+  if (!Number.isFinite(json.closePrice) || !Number.isFinite(json.change) || !json.total) {
+    throw new Error(`Fugle 沒有 ${symbol} 的即時資料`);
   }
-  return quote;
-}
-
-function priceChange(quote) {
-  return Math.round((Number(quote.z) - Number(quote.y)) * 100) / 100;
+  return json;
 }
 
 async function fetchMarket() {
-  const quote = await fetchRealtimeQuote('tse_t00.tw');
-  // The realtime index quote has no market-wide turnover figure, so
-  // trade_value still comes from FMTQIK and keeps its own (often older) date.
-  const rows = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK');
-  const latestFmtqik = rows[rows.length - 1];
+  const quote = await fetchFugleQuote('IX0001');
   return {
-    date: quote.d,
-    taiex: Number(quote.z),
-    change: priceChange(quote),
-    trade_value: Number(latestFmtqik.TradeValue),
-    trade_value_date: latestFmtqik.Date,
+    date: quote.date.replace(/-/g, ''),
+    taiex: quote.closePrice,
+    change: quote.change,
+    trade_value: quote.total.tradeValue,
   };
 }
 
 async function fetchHonChuan() {
-  const quote = await fetchRealtimeQuote('tse_9939.tw');
+  const quote = await fetchFugleQuote('9939');
   return {
-    date: quote.d,
-    close: Number(quote.z),
-    change: priceChange(quote),
-    volume: Number(quote.v) * 1000, // "v" is in 張 (board lots of 1000 shares)
+    date: quote.date.replace(/-/g, ''),
+    close: quote.closePrice,
+    change: quote.change,
+    // Fugle 的 tradeVolume 是「張」，乘 1000 存成「股」，跟資料層原本的單位慣例一致。
+    volume: quote.total.tradeVolume * 1000,
   };
 }
 

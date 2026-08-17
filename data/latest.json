@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-17T11:51:55.616Z",
+  "generated_at": "2026-08-17T13:01:25.109Z",
   "forex": {
     "as_of": "2026-08-17T06:09:53.000Z",
     "usd_twd": 31.829,
@@ -11,8 +11,7 @@
     "date": "20260817",
     "taiex": 45857.27,
     "change": 46.26,
-    "trade_value": 1109746702006,
-    "trade_value_date": "1150814"
+    "trade_value": 942025091110
   },
   "honchuan": {
     "date": "20260817",

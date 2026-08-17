@@ -24,11 +24,6 @@
     margin-bottom: 20px;
   }
   h1 { font-size: 1.4rem; margin: 0; }
-  .version-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
   .version-badge {
     font-size: 0.75rem;
     color: #888;
@@ -36,13 +31,44 @@
     border-radius: 999px;
     padding: 2px 10px;
     background: #fff;
+    cursor: pointer;
+    font-family: inherit;
   }
-  .changelog-link {
-    font-size: 0.75rem;
+  .version-badge:hover { border-color: #cce0ff; color: #007aff; }
+  .changelog-dialog {
+    width: min(480px, 90vw);
+    border: none;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  }
+  .changelog-dialog::backdrop {
+    background: rgba(0,0,0,0.4);
+  }
+  .changelog-dialog h2 {
+    font-size: 1rem;
+    margin: 0 0 12px;
+  }
+  .changelog-dialog ul {
+    margin: 0 0 16px;
+    padding-left: 18px;
+    font-size: 0.85rem;
+    color: #444;
+    line-height: 1.6;
+  }
+  .changelog-dialog li { margin-bottom: 8px; }
+  .changelog-close-btn {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    font-size: 0.9rem;
     color: #007aff;
-    text-decoration: none;
+    background: #fff;
+    border: 1px solid #cce0ff;
+    border-radius: 8px;
+    cursor: pointer;
   }
-  .changelog-link:hover { text-decoration: underline; }
+  .changelog-close-btn:active { background: #eef5ff; }
   section {
     background: #fff;
     border-radius: 12px;
@@ -142,20 +168,17 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <div class="version-info">
-    <span class="version-badge">v0.12.0</span>
-    <a href="#changelog" class="changelog-link">改版紀錄</a>
-  </div>
+  <button class="version-badge" id="versionBtn" type="button">v0.12.1</button>
 </header>
 
-<section class="changelog-section">
-  <details class="sources" id="changelog">
-    <summary>📝 改版紀錄</summary>
-    <ul>
-      <li><strong>v0.12.0</strong>：大盤指數、宏全（9939）股價／成交量改用富果（Fugle）行情 API，取代原本 mis.twse.com.tw ＋ FMTQIK 兩個來源；成交量不再落後一個交易日，跟指數保證同一天。</li>
-    </ul>
-  </details>
-</section>
+<dialog class="changelog-dialog" id="changelogDialog">
+  <h2>📝 改版紀錄</h2>
+  <ul>
+    <li><strong>v0.12.1</strong>：版號按鈕改成點了跳出改版紀錄視窗，取代原本展開式清單。</li>
+    <li><strong>v0.12.0</strong>：大盤指數、宏全（9939）股價／成交量改用富果（Fugle）行情 API，取代原本 mis.twse.com.tw ＋ FMTQIK 兩個來源；成交量不再落後一個交易日，跟指數保證同一天。</li>
+  </ul>
+  <button class="changelog-close-btn" id="changelogCloseBtn" type="button">關閉</button>
+</dialog>
 
 <div class="status-row">
   <div class="status" id="status">載入中...</div>
@@ -192,6 +215,16 @@ const statusEl = document.getElementById('status');
 const outputEl = document.getElementById('output');
 const copyBtn = document.getElementById('copyBtn');
 const reloadBtn = document.getElementById('reloadBtn');
+const versionBtn = document.getElementById('versionBtn');
+const changelogDialog = document.getElementById('changelogDialog');
+const changelogCloseBtn = document.getElementById('changelogCloseBtn');
+
+versionBtn.addEventListener('click', () => changelogDialog.showModal());
+changelogCloseBtn.addEventListener('click', () => changelogDialog.close());
+// Click on the backdrop (outside the dialog's own box) closes it.
+changelogDialog.addEventListener('click', (e) => {
+  if (e.target === changelogDialog) changelogDialog.close();
+});
 
 const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六'];
 

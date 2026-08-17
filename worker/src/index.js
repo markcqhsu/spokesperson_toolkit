@@ -203,7 +203,7 @@ const SOURCE_LABELS = {
   forex: '匯率',
   market: '大盤指數',
   honchuan: '宏全股價',
-  oil_moe: '原油期貨（能源署）',
+  oil_moe: '原油現貨（能源署）',
   oil_cnyes: '原油期貨（鉅亨網）',
   us_market: '美股道瓊',
 };

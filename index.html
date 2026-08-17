@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.10.2</span>
+  <span class="version-badge">v0.10.3</span>
 </header>
 
 <div class="status-row">
@@ -157,7 +157,7 @@
       <li>大盤成交量／成交值：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">證交所 OpenAPI</a>（FMTQIK 集中市場每日市場成交資訊，發布較晚，日期會單獨標註）</li>
       <li>宏全（9939）股價／漲跌／成交量：<a href="https://mis.twse.com.tw/stock/index.jsp" target="_blank" rel="noopener">證交所即時行情系統</a>（跟大盤指數同一套官方系統）</li>
       <li>匯率：<a href="https://tw.rter.info/howto_currencyapi.php" target="_blank" rel="noopener">rter.info 即時匯率</a>（美元對台幣/人民幣/歐元為原始資料，歐元/美元與人民幣/台幣為除法換算，非估算值；每日排程固定抓台北時間 14:00 的報價存下來，報告文字附上的是這個 14:00 報價時間，非產表當下時間）</li>
-      <li>原油期貨（WTI／布侖特，能源署）：<a href="https://www2.moeaea.gov.tw/oil111/CrudeOil/Price" target="_blank" rel="noopener">經濟部能源署原油價格公告</a>（路透社資料，官方每日更新一次的參考價，非即時報價；報告文字附上的日期就是該報價實際結算的日期，通常是查詢當下的前一個已結算交易日）</li>
+      <li>原油現貨（WTI／布侖特，能源署）：<a href="https://www2.moeaea.gov.tw/oil111/CrudeOil/Price" target="_blank" rel="noopener">經濟部能源署原油價格公告</a>（路透社資料，官方每日更新一次的參考價，非即時報價；報告文字附上的日期就是該報價實際結算的日期，通常是查詢當下的前一個已結算交易日）</li>
       <li>原油期貨（WTI／布侖特，鉅亨網）：<a href="https://www.cnyes.com/futures/html5chart/CLCON.html" target="_blank" rel="noopener">鉅亨網連續月紐約輕原油</a>／<a href="https://www.cnyes.com/futures/html5chart/IBCON.html" target="_blank" rel="noopener">近月倫敦布蘭特原油</a>技術線圖頁（同樣是每日收盤一次更新，非即時；跟能源署並列顯示是因為發言人習慣同時核對這兩個來源，不是互相取代或校正）</li>
       <li>美股道瓊指數：Yahoo Finance 非官方公開行情端點</li>
     </ul>
@@ -289,10 +289,11 @@ function buildReport(data) {
   // 能源署與鉅亨網兩個原油來源各自獨立顯示（不是互相取代），發言人習慣兩邊
   // 都核對。每個來源獨立判斷有無資料，其中一個即時抓取失敗不影響另一個。
   function oilLine(name, sourceLabel, quote) {
-    if (!quote) return `${name}原油期貨（${sourceLabel}）：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
+    const oilType = sourceLabel === '能源署' ? '原油現貨' : '原油期貨';
+    if (!quote) return `${name}${oilType}（${sourceLabel}）：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
     const date = fmtDateOnlyTaipei(quote.as_of);
     const changeStr = quote.change == null ? '' : `(${(quote.change >= 0 ? '+' : '')}${quote.change.toFixed(2)}美元)`;
-    return `${name}原油期貨（${sourceLabel}）：${quote.price.toFixed(2)}美元/桶${changeStr}（${date.m}/${date.d}收盤價）`;
+    return `${name}${oilType}（${sourceLabel}）：${quote.price.toFixed(2)}美元/桶${changeStr}（${date.m}/${date.d}收盤價）`;
   }
   lines.push(
     oilLine('西德州', '能源署', data.oil_moe?.wti),

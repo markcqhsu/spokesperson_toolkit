@@ -131,7 +131,7 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <span class="version-badge">v0.10.3</span>
+  <span class="version-badge">v0.11.0</span>
 </header>
 
 <div class="status-row">
@@ -232,32 +232,44 @@ function fmtDateOnlyTaipei(isoString) {
 // Worker path can now return partial data (Promise.allSettled), so every
 // field here is read defensively and a missing one renders as a placeholder
 // line instead of throwing and blanking the whole report.
+// 紅漲綠跌（台股慣例），全篇統一套用：漲用紅色圓點＋▲，跌用綠色圓點＋▼。
+// 純文字報告沒有 CSS 可用，顏色只能靠 emoji 本身固定色，所以用圓點＋方向
+// 符號組合，而不是 🔺/🔻（那兩個 emoji 本身沒有綠色版本）。
+function arrowStr(change, digits) {
+  if (change == null) return '';
+  const abs = Math.abs(change).toFixed(digits);
+  if (change > 0) return `🔴▲${abs}`;
+  if (change < 0) return `🟢▼${abs}`;
+  return `⚪️${abs}`;
+}
+
 function buildReport(data) {
   const today = new Date();
-  const lines = [`${today.getMonth() + 1}/${today.getDate()}（${WEEKDAY[today.getDay()]}）`];
+  const lines = [`📊 ${today.getMonth() + 1}/${today.getDate()} 市場行情快報`, ''];
 
   // market.date / honchuan.date come from TWSE's realtime quote system
   // (Western yyyymmdd); trade_value_date still comes from the slower
   // FMTQIK statistics mirror and keeps ROC-format dates.
+  lines.push('🇹🇼 台股');
   if (data.market) {
-    const marketDate = fmtDateFromWestern(data.market.date);
     const tradeValueDate = fmtDateFromROC(data.market.trade_value_date);
     const marketChange = Math.trunc(data.market.change);
-    const marketChangeStr = (marketChange >= 0 ? '+' : '') + marketChange;
+    const taiexStr = Number(data.market.taiex).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const tradeValueYi = (data.market.trade_value / 1e8).toFixed(0);
-    lines.push(`💰大盤（${marketDate.m}/${marketDate.d}收盤）: ${marketChangeStr}點，加權指數${commas(data.market.taiex)}點，成交量${commas(tradeValueYi)}億元（${tradeValueDate.m}/${tradeValueDate.d}資料）。`);
+    lines.push(`💰 加權指數｜${taiexStr} 點 ${arrowStr(marketChange, 0)} 點`);
+    lines.push(`　成交量｜${commas(tradeValueYi)} 億元（${tradeValueDate.m}/${tradeValueDate.d}）`);
   } else {
-    lines.push(`💰大盤：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+    lines.push(`💰 加權指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
+  lines.push('');
 
   if (data.honchuan) {
     const hc = data.honchuan;
-    const hcDate = fmtDateFromWestern(hc.date);
-    const hcChangeStr = (hc.change >= 0 ? '+' : '') + hc.change.toFixed(1);
     const hcVolumeZhang = Math.round(hc.volume / 1000).toLocaleString('en-US');
-    lines.push(`☀️宏全（${hcDate.m}/${hcDate.d}收盤） ${hcChangeStr}元，收${hc.close.toFixed(2)}元，成交量${hcVolumeZhang}張。`);
+    lines.push(`☀️ 宏全｜${hc.close.toFixed(2)} 元 ${arrowStr(hc.change, 2)} 元`);
+    lines.push(`　成交量｜${hcVolumeZhang} 張`);
   } else {
-    lines.push(`☀️宏全：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+    lines.push(`☀️ 宏全：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
 
   lines.push('');
@@ -265,44 +277,52 @@ function buildReport(data) {
   if (data.forex) {
     const forexTime = fmtDateTimeTaipei(data.forex.as_of);
     lines.push(
-      `💲匯率：(即時匯率，資料時間 ${forexTime.m}/${forexTime.d} ${forexTime.hm})`,
-      `1美元 兌 台幣${data.forex.usd_twd.toFixed(4)}元`,
-      `1歐元 兌 美元${data.forex.eur_usd.toFixed(4)}元`,
-      `1美元 兌 人民幣${data.forex.usd_cny.toFixed(4)}元`,
-      `1人民幣 兌 台幣${data.forex.cny_twd.toFixed(4)}元`,
+      `💱 即時匯率｜${forexTime.m}/${forexTime.d} ${forexTime.hm}`,
+      `🇺🇸 USD / TWD｜${data.forex.usd_twd.toFixed(4)}`,
+      `🇪🇺 EUR / USD｜${data.forex.eur_usd.toFixed(4)}`,
+      `🇨🇳 USD / CNY｜${data.forex.usd_cny.toFixed(4)}`,
+      `🇨🇳 CNY / TWD｜${data.forex.cny_twd.toFixed(4)}`,
     );
   } else {
-    lines.push(`💲匯率：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+    lines.push(`💱 即時匯率：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+  }
+
+  lines.push('', '🇺🇸 美股');
+
+  if (data.us_market) {
+    const us = data.us_market;
+    const usChange = Math.trunc(us.change);
+    const usTime = fmtDateTimeTaipei(us.as_of);
+    const trendIcon = usChange >= 0 ? '📈' : '📉';
+    lines.push(`${trendIcon} 道瓊指數｜${arrowStr(usChange, 0)} 點`);
+    lines.push(`　報價時間｜${usTime.m}/${usTime.d} ${usTime.hm}`);
+  } else {
+    lines.push(`📉 道瓊指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
 
   lines.push('');
 
-  if (data.us_market) {
-    const us = data.us_market;
-    const usChangeStr = (us.change >= 0 ? '+' : '') + Math.trunc(us.change);
-    const usTime = fmtDateTimeTaipei(us.as_of);
-    lines.push(`🌐美股道瓊: ${usChangeStr}點（報價時間 ${usTime.m}/${usTime.d} ${usTime.hm}）`);
-  } else {
-    lines.push(`🌐美股道瓊：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
-  }
-
   // 能源署與鉅亨網兩個原油來源各自獨立顯示（不是互相取代），發言人習慣兩邊
   // 都核對。每個來源獨立判斷有無資料，其中一個即時抓取失敗不影響另一個。
-  function oilLine(name, sourceLabel, quote) {
-    const oilType = sourceLabel === '能源署' ? '原油現貨' : '原油期貨';
-    if (!quote) return `${name}${oilType}（${sourceLabel}）：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
-    const date = fmtDateOnlyTaipei(quote.as_of);
-    const changeStr = quote.change == null ? '' : `(${(quote.change >= 0 ? '+' : '')}${quote.change.toFixed(2)}美元)`;
-    return `${name}${oilType}（${sourceLabel}）：${quote.price.toFixed(2)}美元/桶${changeStr}（${date.m}/${date.d}收盤價）`;
+  function oilQuoteLine(name, quote) {
+    if (!quote) return `${name}｜（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
+    return `${name}｜US$${quote.price.toFixed(2)} / 桶 ${arrowStr(quote.change, 2)}`;
+  }
+  function oilBlock(title, sourceLabel, wti, brent) {
+    const block = [`🛢️ 國際原油｜${title}`, oilQuoteLine('西德州', wti), oilQuoteLine('布侖特', brent)];
+    const dateSource = wti ?? brent;
+    if (dateSource) {
+      const date = fmtDateOnlyTaipei(dateSource.as_of);
+      block.push(`📅 ${date.m}/${date.d} 收盤｜${sourceLabel}`);
+    }
+    return block;
   }
   lines.push(
-    oilLine('西德州', '能源署', data.oil_moe?.wti),
-    oilLine('布侖特', '能源署', data.oil_moe?.brent),
+    ...oilBlock('現貨', '能源署', data.oil_moe?.wti, data.oil_moe?.brent),
     '',
-    '－－－－－－－－－－',
+    '────────────',
     '',
-    oilLine('西德州', '鉅亨網', data.oil_cnyes?.wti),
-    oilLine('布侖特', '鉅亨網', data.oil_cnyes?.brent),
+    ...oilBlock('期貨', '鉅亨網', data.oil_cnyes?.wti, data.oil_cnyes?.brent),
   );
 
   return lines.join('\n');

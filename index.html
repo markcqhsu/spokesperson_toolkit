@@ -278,15 +278,12 @@ function fmtDateOnlyTaipei(isoString) {
 // Worker path can now return partial data (Promise.allSettled), so every
 // field here is read defensively and a missing one renders as a placeholder
 // line instead of throwing and blanking the whole report.
-// 紅漲綠跌（台股慣例），全篇統一套用：漲用紅色圓點＋▲，跌用綠色圓點＋▼。
-// 純文字報告沒有 CSS 可用，顏色只能靠 emoji 本身固定色，所以用圓點＋方向
-// 符號組合，而不是 🔺/🔻（那兩個 emoji 本身沒有綠色版本）。
 function arrowStr(change, digits) {
   if (change == null) return '';
   const abs = Math.abs(change).toFixed(digits);
-  if (change > 0) return `🔴▲${abs}`;
-  if (change < 0) return `🟢▼${abs}`;
-  return `⚪️${abs}`;
+  if (change > 0) return `▲${abs}`;
+  if (change < 0) return `▼${abs}`;
+  return `${abs}`;
 }
 
 function buildReport(data) {
@@ -294,27 +291,31 @@ function buildReport(data) {
   const lines = [`📊 ${today.getMonth() + 1}/${today.getDate()} 市場行情快報`, ''];
 
   // market.date / honchuan.date 都是富果（Fugle）同一筆報價裡的日期
-  // （Western yyyymmdd），加權指數跟成交量現在保證是同一天，不用再分開標日期。
-  lines.push('🇹🇼 台股');
+  // （Western yyyymmdd），加權指數跟成交量現在保證是同一天，直接標在區塊標題。
   if (data.market) {
     const marketDate = fmtDateFromWestern(data.market.date);
     const marketChange = Math.trunc(data.market.change);
     const taiexStr = Number(data.market.taiex).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const tradeValueYi = (data.market.trade_value / 1e8).toFixed(0);
-    lines.push(`💰 加權指數｜${taiexStr} 點 ${arrowStr(marketChange, 0)} 點`);
-    lines.push(`　成交量｜${commas(tradeValueYi)} 億元（${marketDate.m}/${marketDate.d}）`);
+    lines.push(`🇹🇼 台股｜${marketDate.m}/${marketDate.d} 收盤`);
+    lines.push(`加權指數｜${taiexStr} 點　${arrowStr(marketChange, 0)} 點`);
+    lines.push(`成交量　｜${commas(tradeValueYi)} 億元`);
   } else {
-    lines.push(`💰 加權指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+    lines.push('🇹🇼 台股');
+    lines.push(`加權指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
   lines.push('');
 
   if (data.honchuan) {
     const hc = data.honchuan;
+    const hcDate = fmtDateFromWestern(hc.date);
     const hcVolumeZhang = Math.round(hc.volume / 1000).toLocaleString('en-US');
-    lines.push(`☀️ 宏全｜${hc.close.toFixed(2)} 元 ${arrowStr(hc.change, 2)} 元`);
-    lines.push(`　成交量｜${hcVolumeZhang} 張`);
+    lines.push(`☀️ 宏全｜${hcDate.m}/${hcDate.d} 收盤`);
+    lines.push(`收盤價　｜${hc.close.toFixed(2)} 元　${arrowStr(hc.change, 2)} 元`);
+    lines.push(`成交量　｜${hcVolumeZhang} 張`);
   } else {
-    lines.push(`☀️ 宏全：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+    lines.push('☀️ 宏全');
+    lines.push(`收盤價：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
 
   lines.push('');
@@ -323,26 +324,26 @@ function buildReport(data) {
     const forexTime = fmtDateTimeTaipei(data.forex.as_of);
     lines.push(
       `💱 即時匯率｜${forexTime.m}/${forexTime.d} ${forexTime.hm}`,
-      `🇺🇸 USD / TWD｜${data.forex.usd_twd.toFixed(4)}`,
-      `🇪🇺 EUR / USD｜${data.forex.eur_usd.toFixed(4)}`,
-      `🇺🇸 USD / CNY｜${data.forex.usd_cny.toFixed(4)}`,
-      `🇨🇳 CNY / TWD｜${data.forex.cny_twd.toFixed(4)}`,
+      `USD / TWD｜${data.forex.usd_twd.toFixed(4)}`,
+      `EUR / USD｜${data.forex.eur_usd.toFixed(4)}`,
+      `USD / CNY｜${data.forex.usd_cny.toFixed(4)}`,
+      `CNY / TWD｜${data.forex.cny_twd.toFixed(4)}`,
     );
   } else {
     lines.push(`💱 即時匯率：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
 
-  lines.push('', '🇺🇸 美股');
+  lines.push('');
 
   if (data.us_market) {
     const us = data.us_market;
     const usChange = Math.trunc(us.change);
     const usTime = fmtDateTimeTaipei(us.as_of);
-    const trendIcon = usChange >= 0 ? '📈' : '📉';
-    lines.push(`${trendIcon} 道瓊指數｜${arrowStr(usChange, 0)} 點`);
-    lines.push(`　報價時間｜${usTime.m}/${usTime.d} ${usTime.hm}`);
+    lines.push(`🇺🇸 美股｜${usTime.m}/${usTime.d} ${usTime.hm}`);
+    lines.push(`道瓊指數｜${arrowStr(usChange, 0)} 點`);
   } else {
-    lines.push(`📉 道瓊指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
+    lines.push('🇺🇸 美股');
+    lines.push(`道瓊指數：（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`);
   }
 
   lines.push('');
@@ -351,7 +352,7 @@ function buildReport(data) {
   // 都核對。每個來源獨立判斷有無資料，其中一個即時抓取失敗不影響另一個。
   function oilQuoteLine(name, quote) {
     if (!quote) return `${name}｜（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
-    return `${name}｜US$${quote.price.toFixed(2)} / 桶 ${arrowStr(quote.change, 2)}`;
+    return `${name}｜US$${quote.price.toFixed(2)} / 桶　${arrowStr(quote.change, 2)}`;
   }
   function oilBlock(title, sourceLabel, wti, brent) {
     const block = [`🛢️ 國際原油｜${title}`, oilQuoteLine('西德州', wti), oilQuoteLine('布侖特', brent)];

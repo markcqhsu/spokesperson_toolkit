@@ -366,8 +366,6 @@ function buildReport(data) {
   lines.push(
     ...oilBlock('現貨', '能源署', data.oil_moe?.wti, data.oil_moe?.brent),
     '',
-    '────────────',
-    '',
     ...oilBlock('期貨', '鉅亨網', data.oil_cnyes?.wti, data.oil_cnyes?.brent),
   );
 

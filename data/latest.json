@@ -1,52 +1,52 @@
 {
-  "generated_at": "2026-09-01T15:31:24.484Z",
+  "generated_at": "2026-09-02T15:13:48.615Z",
   "forex": {
-    "as_of": "2026-09-01T11:00:01.000Z",
-    "usd_twd": 31.706,
-    "eur_usd": 1.1595547309833023,
+    "as_of": "2026-09-02T10:08:45.000Z",
+    "usd_twd": 31.772,
+    "eur_usd": 1.1575413821044103,
     "usd_cny": 6.7103,
-    "cny_twd": 4.724975038373843
+    "cny_twd": 4.734810664202793
   },
   "market": {
-    "date": "20260901",
-    "taiex": 46948.72,
-    "change": 820.25,
-    "trade_value": 1081025300850
+    "date": "20260902",
+    "taiex": 46164.72,
+    "change": -784,
+    "trade_value": 918393908920
   },
   "honchuan": {
-    "date": "20260901",
-    "close": 132.5,
-    "change": 1,
-    "volume": 590000
+    "date": "20260902",
+    "close": 131.5,
+    "change": -1,
+    "volume": 408000
   },
   "oil_moe": {
     "wti": {
-      "price": 87.03,
-      "change": 2.46,
-      "as_of": "2026-08-31"
+      "price": 91.48,
+      "change": 4.45,
+      "as_of": "2026-09-01"
     },
     "brent": {
-      "price": null,
-      "change": -89.75,
-      "as_of": "2026-08-31"
+      "price": 96.52,
+      "change": 96.52,
+      "as_of": "2026-09-01"
     }
   },
   "oil_cnyes": {
     "wti": {
-      "price": 85.76,
-      "change": 2.36,
-      "as_of": "2026-08-31"
+      "price": 90.22,
+      "change": 4.46,
+      "as_of": "2026-09-01"
     },
     "brent": {
-      "price": 90.49,
-      "change": 2.39,
-      "as_of": "2026-08-31"
+      "price": 94.65,
+      "change": 4.16,
+      "as_of": "2026-09-01"
     }
   },
   "us_market": {
-    "price": 52967.72,
-    "prev_close": 53185.9,
-    "change": -218.18,
-    "as_of": "2026-09-01T15:31:21.000Z"
+    "price": 53088,
+    "prev_close": 52766.88,
+    "change": 321.12,
+    "as_of": "2026-09-02T15:13:45.000Z"
   }
 }

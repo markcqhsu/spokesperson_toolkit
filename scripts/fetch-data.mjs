@@ -81,13 +81,25 @@ async function fetchOilMoe() {
   if (!Array.isArray(rows) || rows.length < 2) {
     throw new Error('能源署原油資料筆數不足，無法算漲跌');
   }
-  const [latest, prev] = rows;
+  // 個別油種在某些日子會沒有報價（例如美國假日 WTI 現貨休市，WestT 會是
+  // null），所以每個油種各自往回找「最近兩筆有報價的日子」來算價格跟漲跌，
+  // as_of 也各自標實際報價日。直接拿 rows[0]／rows[1] 會把 null 當成 0 去減，
+  // 算出 price: null、change: -89.62 這種錯的數字。
   const round2 = (n) => Math.round(n * 100) / 100;
-  const asOf = latest.SurDate.replace(/\//g, '-');
-  return {
-    wti: { price: latest.WestT, change: round2(latest.WestT - prev.WestT), as_of: asOf },
-    brent: { price: latest.Burant, change: round2(latest.Burant - prev.Burant), as_of: asOf },
+  const quoteOf = (field) => {
+    const valid = rows.filter((r) => Number.isFinite(r[field]));
+    if (valid.length < 2) return null;
+    const [latest, prev] = valid;
+    return {
+      price: latest[field],
+      change: round2(latest[field] - prev[field]),
+      as_of: latest.SurDate.replace(/\//g, '-'),
+    };
   };
+  const wti = quoteOf('WestT');
+  const brent = quoteOf('Burant');
+  if (!wti && !brent) throw new Error('能源署原油資料沒有足夠的有效報價，無法算漲跌');
+  return { wti, brent };
 }
 
 // 鉅亨網的期貨走勢圖頁（so.cnyes.com/JavascriptGraphic/chartstudy.aspx）沒有獨立
@@ -109,10 +121,12 @@ async function fetchCnyesDaily(code) {
   if (!res.ok) throw new Error(`cnyes ${code} -> ${res.status}`);
   const html = await res.text();
   const rows = [...html.matchAll(/globalData\.push\(\[([^\]]*)\]\)/g)].map((m) => m[1].split(','));
-  if (rows.length < 2) throw new Error(`cnyes ${code} 沒有足夠的每日資料`);
-  const parseRow = (r) => ({ date: r[2].replace(/'/g, ''), close: Number(r[6]) });
-  const latest = parseRow(rows[rows.length - 1]);
-  const prev = parseRow(rows[rows.length - 2]);
+  const parseRow = (r) => ({ date: (r[2] ?? '').replace(/'/g, ''), close: Number(r[6]) });
+  // 收盤價欄位是空的或不是數字的列直接跳過，不要讓 NaN 流到報告裡。
+  const parsed = rows.map(parseRow).filter((r) => /^\d{8}$/.test(r.date) && Number.isFinite(r.close) && r.close > 0);
+  if (parsed.length < 2) throw new Error(`cnyes ${code} 沒有足夠的每日資料`);
+  const latest = parsed[parsed.length - 1];
+  const prev = parsed[parsed.length - 2];
   const round2 = (n) => Math.round(n * 100) / 100;
   return {
     price: latest.close,

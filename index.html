@@ -168,12 +168,13 @@
 <body>
 <header>
   <h1>最美發言人小工具</h1>
-  <button class="version-badge" id="versionBtn" type="button">v0.12.1</button>
+  <button class="version-badge" id="versionBtn" type="button">v0.12.2</button>
 </header>
 
 <dialog class="changelog-dialog" id="changelogDialog">
   <h2>📝 改版紀錄</h2>
   <ul>
+    <li><strong>v0.12.2</strong>：修正能源署某個油種當天沒有報價（例如美國假日西德州休市）時，整份報告出現「Cannot read properties of null (reading 'toFixed')」而無法顯示的問題；改成顯示該油種最近一個有報價的日子，並在該行標明日期。</li>
     <li><strong>v0.12.1</strong>：版號按鈕改成點了跳出改版紀錄視窗，取代原本展開式清單。</li>
     <li><strong>v0.12.0</strong>：大盤指數、宏全（9939）股價／成交量改用富果（Fugle）行情 API，取代原本 mis.twse.com.tw ＋ FMTQIK 兩個來源；成交量不再落後一個交易日，跟指數保證同一天。</li>
   </ul>
@@ -279,7 +280,7 @@ function fmtDateOnlyTaipei(isoString) {
 // field here is read defensively and a missing one renders as a placeholder
 // line instead of throwing and blanking the whole report.
 function arrowStr(change, digits) {
-  if (change == null) return '';
+  if (!Number.isFinite(change)) return '';
   const abs = Math.abs(change).toFixed(digits);
   if (change > 0) return `▲${abs}`;
   if (change < 0) return `▼${abs}`;
@@ -350,15 +351,30 @@ function buildReport(data) {
 
   // 能源署與鉅亨網兩個原油來源各自獨立顯示（不是互相取代），發言人習慣兩邊
   // 都核對。每個來源獨立判斷有無資料，其中一個即時抓取失敗不影響另一個。
-  function oilQuoteLine(name, quote) {
-    if (!quote) return `${name}｜（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
-    return `${name}｜US$${quote.price.toFixed(2)} / 桶　${arrowStr(quote.change, 2)}`;
+  // 個別油種可能在最新一天沒有報價（例如美國假日 WTI 休市），這時資料層會
+  // 給它前一個有報價的日子；日期跟區塊日期不同的那一行要自己標出來，不能
+  // 讓人誤以為是區塊標的那天的價格。
+  const hasPrice = (quote) => Number.isFinite(quote?.price);
+  function oilQuoteLine(name, quote, blockDate) {
+    if (!hasPrice(quote)) return `${name}｜（即時資料暫時無法取得，請稍後重新讀取；原因見上方狀態列）`;
+    let line = `${name}｜US$${quote.price.toFixed(2)} / 桶　${arrowStr(quote.change, 2)}`;
+    if (quote.as_of !== blockDate) {
+      const own = fmtDateOnlyTaipei(quote.as_of);
+      const block = fmtDateOnlyTaipei(blockDate);
+      line += `（${own.m}/${own.d} 報價，${block.m}/${block.d} 無報價）`;
+    }
+    return line;
   }
   function oilBlock(title, sourceLabel, wti, brent) {
-    const block = [`🛢️ 國際原油｜${title}`, oilQuoteLine('西德州', wti), oilQuoteLine('布侖特', brent)];
-    const dateSource = wti ?? brent;
-    if (dateSource) {
-      const date = fmtDateOnlyTaipei(dateSource.as_of);
+    // as_of 是 YYYY-MM-DD，字串比大小就是日期先後；區塊日期取兩者中較新的。
+    const blockDate = [wti, brent].filter(hasPrice).map((q) => q.as_of).sort().pop();
+    const block = [
+      `🛢️ 國際原油｜${title}`,
+      oilQuoteLine('西德州', wti, blockDate),
+      oilQuoteLine('布侖特', brent, blockDate),
+    ];
+    if (blockDate) {
+      const date = fmtDateOnlyTaipei(blockDate);
       block.push(`📅 ${date.m}/${date.d} 收盤｜${sourceLabel}`);
     }
     return block;
